@@ -1,13 +1,26 @@
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, HttpUrl
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.orm import Session
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
 from typing import Optional, List
-from datetime import datetime
+import user_agents
 import os
-import uuid
+import json
 
-app = FastAPI(title="AI Marketing Dashboard API")
+from database import get_db, User, ActivityLog, Job
+
+app = FastAPI(title="AI Grinners Dashboard API")
+
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
 app.add_middleware(
@@ -18,134 +31,238 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
-
-# Database simulation
-fake_users_db = {
-    "3ayoty@gmail.com": {
-        "email": "3ayoty@gmail.com",
-        "password": "ALI@TIA@20",
-        "full_name": "Admin User",
-        "quota": 50,
-        "role": "admin"
-    }
-}
-
-fake_jobs_db = {}
-
-class User(BaseModel):
-    email: EmailStr
-    full_name: Optional[str] = None
-    quota: int = 15
-    role: str = "user"
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-class TokenResponse(BaseModel):
+# Pydantic Models
+class Token(BaseModel):
     access_token: str
     token_type: str
 
-class JobRequest(BaseModel):
-    domain: str
-    max_pages: int = 150
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: Optional[str]
+    role: str
+    quota: int
+    is_active: bool
+    created_at: datetime
+    last_login: Optional[datetime]
 
-class Job(BaseModel):
-    id: str
-    domain: str
-    status: str
-    created_at: str
-    progress: int
-    pages_analyzed: int
-    insights: Optional[dict] = None
+class ActivityLogResponse(BaseModel):
+    id: int
+    email: Optional[str]
+    action: str
+    ip_address: Optional[str]
+    os: Optional[str]
+    browser: Optional[str]
+    timestamp: datetime
+    success: bool
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
-    if not token.startswith("token_"):
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: Optional[str]
+    role: str = "user"
+    quota: int = 15
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str]
+    role: Optional[str]
+    quota: Optional[int]
+    is_active: Optional[bool]
+
+# Helper functions
+def hash_password(password: str):
+    return pwd_context.hash(password)
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def log_activity(db: Session, request: Request, email: str, action: str, success: bool = True, user_id: int = None):
+    ua_string = request.headers.get("user-agent", "")
+    ua = user_agents.parse(ua_string)
+    
+    log = ActivityLog(
+        user_id=user_id,
+        email=email,
+        action=action,
+        ip_address=request.client.host if request.client else None,
+        user_agent=ua_string,
+        os=f"{ua.os.family} {ua.os.version_string}" if ua.os.family else None,
+        browser=f"{ua.browser.family} {ua.browser.version_string}" if ua.browser.family else None,
+        success=success
+    )
+    db.add(log)
+    db.commit()
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    user_email = token.replace("token_", "").split("_")[0]
-    user_data = fake_users_db.get(user_email)
-    if not user_data:
-        raise HTTPException(status_code=401, detail="User not found")
-    return User(**user_data)
-
-def analyze_website_task(job_id: str, domain: str):
-    """Simulate website analysis"""
-    import time
-    job = fake_jobs_db[job_id]
     
-    for i in range(1, 151):
-        time.sleep(0.1)  # Simulate work
-        job["progress"] = int((i / 150) * 100)
-        job["pages_analyzed"] = i
-    
-    job["status"] = "completed"
-    job["insights"] = {
-        "total_pages": 150,
-        "seo_score": 78,
-        "performance_score": 85,
-        "accessibility_score": 92,
-        "keywords": ["marketing", "AI", "automation", "analytics"],
-        "recommendations": [
-            "Improve meta descriptions on 23 pages",
-            "Add alt text to 45 images",
-            "Reduce page load time by 30%"
-        ]
-    }
+    user = db.query(User).filter(User.email == email).first()
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+    return user
 
+async def get_admin_user(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+# Initialize admin user on startup
+@app.on_event("startup")
+def startup():
+    db = SessionLocal()
+    admin = db.query(User).filter(User.email == "3ayoty@gmail.com").first()
+    if not admin:
+        admin = User(
+            email="3ayoty@gmail.com",
+            hashed_password=hash_password("ALI@TIA@20"),
+            full_name="Admin User",
+            role="admin",
+            quota=999,
+            is_active=True
+        )
+        db.add(admin)
+        db.commit()
+    db.close()
+
+# Routes
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "AI Marketing Dashboard API"}
+    return {"status": "ok", "message": "AI Grinners Dashboard API"}
 
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
-
-@app.post("/api/token", response_model=TokenResponse)
-async def login(credentials: LoginRequest):
-    user_data = fake_users_db.get(credentials.email)
-    if not user_data or user_data["password"] != credentials.password:
+@app.post("/api/token", response_model=Token)
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == form_data.username).first()
+    
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        log_activity(db, request, form_data.username, "login_failed", success=False)
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {"access_token": f"token_{credentials.email}_{uuid.uuid4().hex[:8]}", "token_type": "bearer"}
+    
+    if not user.is_active:
+        log_activity(db, request, form_data.username, "login_inactive", success=False, user_id=user.id)
+        raise HTTPException(status_code=401, detail="Account is inactive")
+    
+    user.last_login = datetime.utcnow()
+    db.commit()
+    
+    log_activity(db, request, user.email, "login_success", user_id=user.id)
+    
+    access_token = create_access_token(data={"sub": user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/api/me", response_model=User)
+@app.get("/api/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
-@app.post("/api/jobs", response_model=Job)
-async def create_job(
-    job_request: JobRequest, 
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user)
+# Admin Routes
+@app.get("/api/admin/users", response_model=List[UserResponse])
+async def get_users(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    return db.query(User).all()
+
+@app.post("/api/admin/users", response_model=UserResponse)
+async def create_user(
+    user_data: UserCreate,
+    request: Request,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
 ):
-    if current_user.quota <= 0:
-        raise HTTPException(status_code=400, detail="No quota remaining")
+    existing = db.query(User).filter(User.email == user_data.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
     
-    job_id = str(uuid.uuid4())
-    job = {
-        "id": job_id,
-        "domain": job_request.domain,
-        "status": "processing",
-        "created_at": datetime.now().isoformat(),
-        "progress": 0,
-        "pages_analyzed": 0,
-        "insights": None
+    new_user = User(
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
+        full_name=user_data.full_name,
+        role=user_data.role,
+        quota=user_data.quota
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    log_activity(db, request, admin.email, f"created_user:{user_data.email}", user_id=admin.id)
+    return new_user
+
+@app.put("/api/admin/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    user_data: UserUpdate,
+    request: Request,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user_data.full_name is not None:
+        user.full_name = user_data.full_name
+    if user_data.role is not None:
+        user.role = user_data.role
+    if user_data.quota is not None:
+        user.quota = user_data.quota
+    if user_data.is_active is not None:
+        user.is_active = user_data.is_active
+    
+    db.commit()
+    db.refresh(user)
+    
+    log_activity(db, request, admin.email, f"updated_user:{user.email}", user_id=admin.id)
+    return user
+
+@app.delete("/api/admin/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    request: Request,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.role == "admin" and user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    
+    email = user.email
+    db.delete(user)
+    db.commit()
+    
+    log_activity(db, request, admin.email, f"deleted_user:{email}", user_id=admin.id)
+    return {"message": "User deleted"}
+
+@app.get("/api/admin/activity", response_model=List[ActivityLogResponse])
+async def get_activity_logs(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+    limit: int = 100
+):
+    return db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(limit).all()
+
+@app.get("/api/admin/stats")
+async def get_stats(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    total_users = db.query(User).count()
+    active_users = db.query(User).filter(User.is_active == True).count()
+    total_jobs = db.query(Job).count()
+    completed_jobs = db.query(Job).filter(Job.status == "completed").count()
+    
+    return {
+        "total_users": total_users,
+        "active_users": active_users,
+        "inactive_users": total_users - active_users,
+        "total_jobs": total_jobs,
+        "completed_jobs": completed_jobs,
+        "pending_jobs": total_jobs - completed_jobs
     }
-    
-    fake_jobs_db[job_id] = job
-    fake_users_db[current_user.email]["quota"] -= 1
-    
-    background_tasks.add_task(analyze_website_task, job_id, job_request.domain)
-    
-    return Job(**job)
-
-@app.get("/api/jobs", response_model=List[Job])
-async def get_jobs(current_user: User = Depends(get_current_user)):
-    return [Job(**job) for job in fake_jobs_db.values()]
-
-@app.get("/api/jobs/{job_id}", response_model=Job)
-async def get_job(job_id: str, current_user: User = Depends(get_current_user)):
-    job = fake_jobs_db.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return Job(**job)
