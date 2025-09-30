@@ -4,7 +4,7 @@ module.exports = {
     return [
       {
         source: '/api/:path*',
-        destination: process.env.NEXT_PUBLIC_API_URL + '/:path*',
+        destination: 'https://ai-dashboard-backend-7dha.onrender.com/:path*',
       },
     ]
   },
