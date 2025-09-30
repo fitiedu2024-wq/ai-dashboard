@@ -9,6 +9,7 @@ import jwt
 from datetime import datetime, timedelta
 from typing import Optional, List
 import user_agents
+import requests
 import os
 
 from database import get_db, User, ActivityLog, Job, SessionLocal, engine
@@ -51,11 +52,15 @@ class UserResponse(BaseModel):
 
 class ActivityLogResponse(BaseModel):
     id: int
+    user_id: Optional[int]
     email: Optional[str]
     action: str
     ip_address: Optional[str]
+    country: Optional[str]
+    city: Optional[str]
     os: Optional[str]
     browser: Optional[str]
+    device_type: Optional[str]
     timestamp: datetime
     success: bool
 
@@ -91,18 +96,46 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+def get_location_from_ip(ip: str):
+    """Get location using free IP geolocation API"""
+    try:
+        if ip in ["127.0.0.1", "localhost", None]:
+            return None, None
+        
+        response = requests.get(f"http://ip-api.com/json/{ip}", timeout=2)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == "success":
+                return data.get("country"), data.get("city")
+    except:
+        pass
+    return None, None
+
 def log_activity(db: Session, request: Request, email: str, action: str, success: bool = True, user_id: int = None):
     ua_string = request.headers.get("user-agent", "")
     ua = user_agents.parse(ua_string)
+    
+    ip_address = request.client.host if request.client else None
+    country, city = get_location_from_ip(ip_address)
+    
+    # Determine device type
+    device_type = "pc"
+    if ua.is_mobile:
+        device_type = "mobile"
+    elif ua.is_tablet:
+        device_type = "tablet"
     
     log = ActivityLog(
         user_id=user_id,
         email=email,
         action=action,
-        ip_address=request.client.host if request.client else None,
+        ip_address=ip_address,
+        country=country,
+        city=city,
         user_agent=ua_string,
         os=f"{ua.os.family} {ua.os.version_string}" if ua.os.family else None,
         browser=f"{ua.browser.family} {ua.browser.version_string}" if ua.browser.family else None,
+        device_type=device_type,
         success=success
     )
     db.add(log)
@@ -184,6 +217,16 @@ async def get_me(current_user: User = Depends(get_current_user)):
 @app.get("/api/admin/users", response_model=List[UserResponse])
 async def get_users(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     return db.query(User).all()
+
+@app.get("/api/admin/users/{user_id}/activity", response_model=List[ActivityLogResponse])
+async def get_user_activity(
+    user_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+    limit: int = 50
+):
+    """Get activity logs for specific user"""
+    return db.query(ActivityLog).filter(ActivityLog.user_id == user_id).order_by(ActivityLog.timestamp.desc()).limit(limit).all()
 
 @app.post("/api/admin/users", response_model=UserResponse)
 async def create_user(

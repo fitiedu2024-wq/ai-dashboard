@@ -33,9 +33,12 @@ class ActivityLog(Base):
     email = Column(String, nullable=True)
     action = Column(String, nullable=False)
     ip_address = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    city = Column(String, nullable=True)
     user_agent = Column(Text, nullable=True)
     os = Column(String, nullable=True)
     browser = Column(String, nullable=True)
+    device_type = Column(String, nullable=True)  # mobile, tablet, pc
     timestamp = Column(DateTime, default=datetime.utcnow)
     success = Column(Boolean, default=True)
 
