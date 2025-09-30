@@ -11,7 +11,7 @@ import user_agents
 import os
 import json
 
-from database import get_db, User, ActivityLog, Job
+from database import get_db, User, ActivityLog, Job, SessionLocal, engine
 
 app = FastAPI(title="AI Grinners Dashboard API")
 
@@ -46,6 +46,9 @@ class UserResponse(BaseModel):
     created_at: datetime
     last_login: Optional[datetime]
 
+    class Config:
+        from_attributes = True
+
 class ActivityLogResponse(BaseModel):
     id: int
     email: Optional[str]
@@ -56,6 +59,9 @@ class ActivityLogResponse(BaseModel):
     timestamp: datetime
     success: bool
 
+    class Config:
+        from_attributes = True
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -64,10 +70,10 @@ class UserCreate(BaseModel):
     quota: int = 15
 
 class UserUpdate(BaseModel):
-    full_name: Optional[str]
-    role: Optional[str]
-    quota: Optional[int]
-    is_active: Optional[bool]
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    quota: Optional[int] = None
+    is_active: Optional[bool] = None
 
 # Helper functions
 def hash_password(password: str):
@@ -121,25 +127,35 @@ async def get_admin_user(current_user: User = Depends(get_current_user)):
 # Initialize admin user on startup
 @app.on_event("startup")
 def startup():
+    # Create tables
+    from database import Base
+    Base.metadata.create_all(bind=engine)
+    
     db = SessionLocal()
-    admin = db.query(User).filter(User.email == "3ayoty@gmail.com").first()
-    if not admin:
-        admin = User(
-            email="3ayoty@gmail.com",
-            hashed_password=hash_password("ALI@TIA@20"),
-            full_name="Admin User",
-            role="admin",
-            quota=999,
-            is_active=True
-        )
-        db.add(admin)
-        db.commit()
-    db.close()
+    try:
+        admin = db.query(User).filter(User.email == "3ayoty@gmail.com").first()
+        if not admin:
+            admin = User(
+                email="3ayoty@gmail.com",
+                hashed_password=hash_password("ALI@TIA@20"),
+                full_name="Admin User",
+                role="admin",
+                quota=999,
+                is_active=True
+            )
+            db.add(admin)
+            db.commit()
+    finally:
+        db.close()
 
 # Routes
 @app.get("/")
 def root():
     return {"status": "ok", "message": "AI Grinners Dashboard API"}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 @app.post("/api/token", response_model=Token)
 async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
