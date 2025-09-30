@@ -1,25 +1,25 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
-from jose import JWTError, jwt
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
+import jwt
 from datetime import datetime, timedelta
 from typing import Optional, List
 import user_agents
 import os
-import json
 
 from database import get_db, User, ActivityLog, Job, SessionLocal, engine
 
 app = FastAPI(title="AI Grinners Dashboard API")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY", "grinners-secret-key-2025")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+ph = PasswordHasher()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
@@ -31,7 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic Models
+# Models
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -75,12 +75,15 @@ class UserUpdate(BaseModel):
     quota: Optional[int] = None
     is_active: Optional[bool] = None
 
-# Helper functions
 def hash_password(password: str):
-    return pwd_context.hash(password)
+    return ph.hash(password)
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str):
+    try:
+        ph.verify(hashed_password, plain_password)
+        return True
+    except VerifyMismatchError:
+        return False
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -111,12 +114,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         email: str = payload.get("sub")
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-    except JWTError:
+    except:
         raise HTTPException(status_code=401, detail="Invalid token")
     
     user = db.query(User).filter(User.email == email).first()
     if user is None or not user.is_active:
-        raise HTTPException(status_code=401, detail="User not found or inactive")
+        raise HTTPException(status_code=401, detail="User not found")
     return user
 
 async def get_admin_user(current_user: User = Depends(get_current_user)):
@@ -124,10 +127,8 @@ async def get_admin_user(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
-# Initialize admin user on startup
 @app.on_event("startup")
 def startup():
-    # Create tables
     from database import Base
     Base.metadata.create_all(bind=engine)
     
@@ -148,7 +149,6 @@ def startup():
     finally:
         db.close()
 
-# Routes
 @app.get("/")
 def root():
     return {"status": "ok", "message": "AI Grinners Dashboard API"}
@@ -167,7 +167,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     
     if not user.is_active:
         log_activity(db, request, form_data.username, "login_inactive", success=False, user_id=user.id)
-        raise HTTPException(status_code=401, detail="Account is inactive")
+        raise HTTPException(status_code=401, detail="Account inactive")
     
     user.last_login = datetime.utcnow()
     db.commit()
@@ -181,7 +181,6 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
-# Admin Routes
 @app.get("/api/admin/users", response_model=List[UserResponse])
 async def get_users(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     return db.query(User).all()
@@ -195,7 +194,7 @@ async def create_user(
 ):
     existing = db.query(User).filter(User.email == user_data.email).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Email already exists")
     
     new_user = User(
         email=user_data.email,
