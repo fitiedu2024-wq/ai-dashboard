@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai-dashboard-backend-7dha.onrender.com'
+
 interface User {
   email: string
   full_name?: string
@@ -20,7 +22,7 @@ export default function Dashboard() {
       return
     }
 
-    fetch('/api/me', {
+    fetch(`${API_URL}/api/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))

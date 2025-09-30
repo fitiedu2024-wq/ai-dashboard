@@ -2,6 +2,8 @@
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai-dashboard-backend-7dha.onrender.com'
+
 export default function Login() {
   const [email, setEmail] = useState('user@example.com')
   const [password, setPassword] = useState('password')
@@ -15,7 +17,7 @@ export default function Login() {
     setError('')
 
     try {
-      const res = await fetch('/api/token', {
+      const res = await fetch(`${API_URL}/api/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
