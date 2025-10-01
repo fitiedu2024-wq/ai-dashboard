@@ -18,6 +18,8 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null)
+  const [newPassword, setNewPassword] = useState('')
   const [newUser, setNewUser] = useState({ 
     email: '', 
     password: '', 
@@ -74,6 +76,28 @@ export default function UsersPage() {
       body: JSON.stringify(updates),
     })
     fetchUsers()
+  }
+
+  const handleResetPassword = async () => {
+    if (!resetPasswordUser || !newPassword) return
+    
+    const token = localStorage.getItem('token')
+    const res = await fetch(`${API_URL}/api/admin/users/${resetPasswordUser.id}/reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ new_password: newPassword }),
+    })
+
+    if (res.ok) {
+      alert('Password reset successfully')
+      setResetPasswordUser(null)
+      setNewPassword('')
+    } else {
+      alert('Failed to reset password')
+    }
   }
 
   const toggleActive = (user: User) => {
@@ -176,6 +200,12 @@ export default function UsersPage() {
                   +10 Quota
                 </button>
                 <button
+                  onClick={() => setResetPasswordUser(user)}
+                  className="px-4 py-2 bg-yellow-50 text-yellow-600 hover:bg-yellow-100 rounded-lg text-sm font-medium transition"
+                >
+                  Reset Password
+                </button>
+                <button
                   onClick={() => toggleActive(user)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                     user.is_active
@@ -255,6 +285,46 @@ export default function UsersPage() {
                 </button>
                 <button
                   onClick={() => setShowModal(false)}
+                  className="flex-1 px-6 py-3 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetPasswordUser && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
+            <h3 className="text-2xl font-bold mb-6 text-gray-800">Reset Password</h3>
+            <p className="text-gray-600 mb-4">
+              Reset password for: <span className="font-semibold">{resetPasswordUser.email}</span>
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                <input
+                  type="password"
+                  placeholder="Enter new password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleResetPassword}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-lg hover:from-yellow-700 hover:to-orange-700 font-medium transition shadow-lg"
+                >
+                  Reset Password
+                </button>
+                <button
+                  onClick={() => {
+                    setResetPasswordUser(null)
+                    setNewPassword('')
+                  }}
                   className="flex-1 px-6 py-3 bg-gray-200 rounded-lg hover:bg-gray-300 font-medium transition"
                 >
                   Cancel
