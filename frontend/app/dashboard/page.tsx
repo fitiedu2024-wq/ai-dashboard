@@ -167,7 +167,6 @@ export default function Dashboard() {
     }
 
     setAnalyzing(true)
-    
     setTimeout(() => {
       alert('Analysis feature coming soon!')
       setAnalyzing(false)
@@ -181,62 +180,118 @@ export default function Dashboard() {
     return 'Good Evening'
   }
 
+  const getQuotaPercentage = () => {
+    const maxQuota = 999
+    return Math.min((user?.quota || 0) / maxQuota * 100, 100)
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-purple-600"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-900 via-purple-700 to-blue-900">
+        <div className="relative">
+          <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-white"></div>
+          <div className="absolute inset-0 animate-ping rounded-full h-20 w-20 border-4 border-white opacity-20"></div>
+        </div>
+        <p className="text-white text-lg mt-6 animate-pulse">Loading your dashboard...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
-      <header className="bg-white/80 backdrop-blur-lg border-b border-gray-200 shadow-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+      </div>
+
+      <style jsx>{`
+        @keyframes blob {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+      `}</style>
+
+      {/* Header */}
+      <header className="relative bg-black/20 backdrop-blur-xl border-b border-white/10 shadow-2xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                AI Grinners
-              </h1>
-              <p className="text-sm text-gray-600 mt-1">Marketing Intelligence Platform</p>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg transform hover:scale-110 transition">
+                <span className="text-2xl font-bold text-white">AG</span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">AI Grinners</h1>
+                <p className="text-sm text-purple-300">Marketing Intelligence Platform</p>
+              </div>
             </div>
             <button
               onClick={() => {
                 localStorage.removeItem('token')
                 router.push('/login')
               }}
-              className="px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 font-medium shadow-lg hover:shadow-xl transition transform hover:scale-105"
+              className="group px-6 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium shadow-lg hover:shadow-red-500/50 transition transform hover:scale-105"
             >
-              Logout
+              <span className="group-hover:hidden">Logout</span>
+              <span className="hidden group-hover:inline">👋 Goodbye</span>
             </button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl p-8 border border-gray-100">
-          <div className="flex items-start justify-between">
+      <div className="relative max-w-7xl mx-auto px-6 py-8 space-y-8">
+        {/* Greeting + Quote Section */}
+        <div className="group bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20 hover:border-purple-400/50 transition-all duration-500 hover:shadow-purple-500/20">
+          <div className="flex items-start justify-between mb-6">
             <div className="flex-1">
-              <h2 className="text-3xl font-bold text-gray-800">
+              <h2 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
                 {getGreeting()}, {user?.full_name || user?.email.split('@')[0]}!
+                <span className="animate-wave inline-block">👋</span>
               </h2>
-              <p className="text-gray-600 mt-2">Ready to analyze and optimize your marketing strategy?</p>
+              <p className="text-purple-200 text-lg">Ready to revolutionize your marketing strategy?</p>
             </div>
             {user?.role === 'admin' && (
-              <span className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-full text-sm font-medium shadow-lg">
-                Admin
+              <span className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-full text-sm font-bold shadow-lg shadow-purple-500/50 animate-pulse">
+                👑 ADMIN
               </span>
             )}
           </div>
 
-          <div className="mt-6 p-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border-l-4 border-purple-500">
-            <div className="flex items-start gap-3">
-              <span className="text-4xl text-purple-600">"</span>
-              <div className="flex-1">
-                <p className="text-gray-700 italic text-lg leading-relaxed">
-                  {quote.quote}
-                </p>
-                <p className="text-purple-600 font-semibold mt-3 text-right">
+          <style jsx>{`
+            @keyframes wave {
+              0%, 100% { transform: rotate(0deg); }
+              10%, 30% { transform: rotate(14deg); }
+              20% { transform: rotate(-8deg); }
+              40% { transform: rotate(-4deg); }
+              50% { transform: rotate(10deg); }
+            }
+            .animate-wave {
+              animation: wave 2.5s infinite;
+              transform-origin: 70% 70%;
+            }
+          `}</style>
+
+          {/* Quote with enhanced styling */}
+          <div className="relative mt-6 p-8 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-2xl border-l-4 border-purple-400 backdrop-blur-sm group-hover:border-purple-300 transition-all duration-300">
+            <div className="absolute -top-4 -left-4 text-6xl text-purple-400 opacity-30">"</div>
+            <div className="relative">
+              <p className="text-white text-xl leading-relaxed font-light italic mb-4 pl-8">
+                {quote.quote}
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent to-purple-400"></div>
+                <p className="text-purple-300 font-bold text-lg">
                   — {quote.author}
                 </p>
               </div>
@@ -244,94 +299,139 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Stats Cards with enhanced design */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl p-6 border border-gray-100 hover:shadow-2xl transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Quota Remaining</p>
-                <p className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mt-2">
-                  {user?.quota}
-                </p>
+          {/* Quota Card with progress bar */}
+          <div className="group relative bg-gradient-to-br from-purple-500/20 to-purple-600/20 backdrop-blur-xl rounded-2xl shadow-2xl p-6 border border-purple-400/30 hover:border-purple-400/60 transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-purple-600/0 group-hover:from-purple-500/10 group-hover:to-purple-600/10 transition-all duration-300"></div>
+            <div className="relative">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-purple-200 text-sm font-semibold uppercase tracking-wider mb-2">Quota Remaining</p>
+                  <p className="text-5xl font-bold text-white">{user?.quota}</p>
+                  <p className="text-purple-300 text-sm mt-1">analyses available</p>
+                </div>
+                <div className="w-16 h-16 bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
+                  <span className="text-3xl">🎯</span>
+                </div>
               </div>
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-3xl">🎯</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl p-6 border border-gray-100 hover:shadow-2xl transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Total Jobs</p>
-                <p className="text-4xl font-bold text-green-600 mt-2">{jobs.length}</p>
-              </div>
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-3xl">📊</span>
+              {/* Progress bar */}
+              <div className="mt-4 h-3 bg-black/30 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-400 to-pink-500 rounded-full transition-all duration-1000 ease-out shadow-lg shadow-purple-500/50"
+                  style={{ width: `${getQuotaPercentage()}%` }}
+                ></div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl p-6 border border-gray-100 hover:shadow-2xl transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Completed</p>
-                <p className="text-4xl font-bold text-purple-600 mt-2">
-                  {jobs.filter(j => j.status === 'completed').length}
-                </p>
+          {/* Total Jobs Card */}
+          <div className="group relative bg-gradient-to-br from-green-500/20 to-emerald-600/20 backdrop-blur-xl rounded-2xl shadow-2xl p-6 border border-green-400/30 hover:border-green-400/60 transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/0 to-emerald-600/0 group-hover:from-green-500/10 group-hover:to-emerald-600/10 transition-all duration-300"></div>
+            <div className="relative">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-green-200 text-sm font-semibold uppercase tracking-wider mb-2">Total Analyses</p>
+                  <p className="text-5xl font-bold text-white">{jobs.length}</p>
+                  <p className="text-green-300 text-sm mt-1">completed & pending</p>
+                </div>
+                <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-110 group-hover:-rotate-12 transition-all duration-300">
+                  <span className="text-3xl">📊</span>
+                </div>
               </div>
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-3xl">✅</span>
+            </div>
+          </div>
+
+          {/* Completed Card */}
+          <div className="group relative bg-gradient-to-br from-blue-500/20 to-indigo-600/20 backdrop-blur-xl rounded-2xl shadow-2xl p-6 border border-blue-400/30 hover:border-blue-400/60 transition-all duration-300 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-indigo-600/0 group-hover:from-blue-500/10 group-hover:to-indigo-600/10 transition-all duration-300"></div>
+            <div className="relative">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-blue-200 text-sm font-semibold uppercase tracking-wider mb-2">Completed</p>
+                  <p className="text-5xl font-bold text-white">{jobs.filter(j => j.status === 'completed').length}</p>
+                  <p className="text-blue-300 text-sm mt-1">successful analyses</p>
+                </div>
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
+                  <span className="text-3xl">✅</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl p-8 border border-gray-100">
-          <h3 className="text-2xl font-bold text-gray-800 mb-6">🚀 Create New Analysis</h3>
+        {/* Create New Analysis */}
+        <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20 hover:border-purple-400/50 transition-all duration-300">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+              <span className="text-2xl">🚀</span>
+            </div>
+            <h3 className="text-3xl font-bold text-white">Launch New Analysis</h3>
+          </div>
           <div className="flex gap-4">
             <input
               type="text"
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
-              placeholder="Enter domain (e.g., fitiedu.com)"
-              className="flex-1 px-6 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg transition"
+              placeholder="Enter your domain (e.g., fitiedu.com)"
+              className="flex-1 px-6 py-4 bg-white/10 border-2 border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-white placeholder-purple-200 text-lg backdrop-blur-sm transition-all"
               disabled={analyzing}
             />
             <button
               onClick={handleAnalyze}
               disabled={analyzing || user?.quota === 0}
-              className="px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-lg hover:shadow-xl transition transform hover:scale-105 text-lg"
+              className="group px-10 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold shadow-2xl hover:shadow-purple-500/50 transition-all transform hover:scale-105 text-lg relative overflow-hidden"
             >
-              {analyzing ? 'Analyzing...' : 'Analyze'}
+              <span className="relative z-10">
+                {analyzing ? 'Analyzing...' : 'Analyze Now'}
+              </span>
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-blue-400 opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
             </button>
           </div>
           {user?.quota === 0 && (
-            <p className="text-red-600 text-sm mt-3">⚠️ You've reached your quota limit. Contact admin for more.</p>
+            <div className="mt-4 p-4 bg-red-500/20 border border-red-500/50 rounded-xl">
+              <p className="text-red-200 text-sm font-semibold">⚠️ Quota limit reached. Contact administrator for more analyses.</p>
+            </div>
           )}
         </div>
 
-        <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl p-8 border border-gray-100">
-          <h3 className="text-2xl font-bold text-gray-800 mb-6">📈 Analysis History</h3>
+        {/* Analysis History */}
+        <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
+              <span className="text-2xl">📈</span>
+            </div>
+            <h3 className="text-3xl font-bold text-white">Analysis History</h3>
+          </div>
           {jobs.length === 0 ? (
-            <div className="text-center py-12">
-              <span className="text-6xl mb-4 block">🎯</span>
-              <p className="text-gray-500 text-lg">No analyses yet. Create your first one above!</p>
+            <div className="text-center py-16">
+              <div className="inline-block animate-bounce mb-6">
+                <span className="text-8xl">🎯</span>
+              </div>
+              <p className="text-purple-200 text-xl font-light">No analyses yet. Launch your first one above!</p>
             </div>
           ) : (
             <div className="space-y-4">
               {jobs.map(job => (
-                <div key={job.id} className="p-6 border border-gray-200 rounded-xl hover:shadow-lg transition bg-gray-50">
+                <div key={job.id} className="group p-6 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 hover:border-purple-400/50 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/20">
                   <div className="flex justify-between items-center">
-                    <div>
-                      <h4 className="font-semibold text-lg text-gray-800">{job.domain.toUpperCase()}</h4>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {new Date(job.created_at).toLocaleString()}
-                      </p>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                        {job.domain[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xl text-white group-hover:text-purple-300 transition-colors">
+                          {job.domain.toUpperCase()}
+                        </h4>
+                        <p className="text-sm text-purple-300 mt-1">
+                          {new Date(job.created_at).toLocaleString()}
+                        </p>
+                      </div>
                     </div>
-                    <span className={`px-4 py-2 rounded-full text-sm font-medium ${
+                    <span className={`px-5 py-2.5 rounded-full text-sm font-bold shadow-lg ${
                       job.status === 'completed' 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-yellow-100 text-yellow-700'
+                        ? 'bg-green-500/20 text-green-300 border border-green-400/50' 
+                        : 'bg-yellow-500/20 text-yellow-300 border border-yellow-400/50'
                     }`}>
                       {job.status === 'completed' ? '✅ Completed' : '⏳ Processing'}
                     </span>
