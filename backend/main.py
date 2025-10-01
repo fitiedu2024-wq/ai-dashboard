@@ -351,3 +351,28 @@ def init_db():
     db.close()
 
 init_db()
+
+# Force recreate admin on startup
+@app.on_event("startup")
+async def startup_event():
+    db = SessionLocal()
+    try:
+        admin = db.query(User).filter(User.email == "3ayoty@gmail.com").first()
+        if not admin:
+            admin = User(
+                email="3ayoty@gmail.com",
+                hashed_password=hash_password("123456789"),
+                full_name="Admin User",
+                role="admin",
+                quota=999,
+                is_active=True
+            )
+            db.add(admin)
+            db.commit()
+            print("✅ Admin user created successfully")
+        else:
+            print(f"✅ Admin user exists - email: {admin.email}, role: {admin.role}")
+    except Exception as e:
+        print(f"❌ Error creating admin: {e}")
+    finally:
+        db.close()
