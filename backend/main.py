@@ -6,10 +6,11 @@ from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional
 import os
 from models import Base, User, ActivityLog, AnalysisJob
 import json
+from analyzers import analyze_domain
 
 app = FastAPI()
 
@@ -155,27 +156,21 @@ async def create_analysis(
     
     log_activity(db, request, f"analysis_started:{domain_name}", current_user.id)
     
-    # TODO: Trigger actual analysis (we'll do this next)
-    # For now, mock results
-    mock_results = {
-        "domain": domain_name,
-        "seo_score": 85,
-        "performance_score": 90,
-        "content_quality": 78,
-        "social_presence": 82,
-        "recommendations": [
-            "Improve meta descriptions",
-            "Add more backlinks",
-            "Optimize images for faster loading"
-        ]
-    }
-    
-    job.results = json.dumps(mock_results)
-    job.status = "completed"
-    job.completed_at = datetime.utcnow()
-    db.commit()
-    
-    return {"job_id": job.id, "status": job.status, "message": "Analysis started"}
+    # Run analysis
+    try:
+        analysis_results = analyze_domain(domain_name)
+        
+        job.results = json.dumps(analysis_results)
+        job.status = "completed"
+        job.completed_at = datetime.utcnow()
+        db.commit()
+        
+        return {"job_id": job.id, "status": job.status, "message": "Analysis completed"}
+    except Exception as e:
+        job.status = "failed"
+        job.error_message = str(e)
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 @app.get("/api/jobs")
 def get_user_jobs(
@@ -217,7 +212,7 @@ def get_job_details(
         "error_message": job.error_message
     }
 
-# Admin endpoints (existing ones)
+# Admin endpoints
 @app.get("/api/admin/stats")
 def get_admin_stats(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     total_users = db.query(func.count(User.id)).scalar()
@@ -334,25 +329,7 @@ def get_activity_logs(
     
     return result
 
-# Initialize admin user
-def init_db():
-    db = SessionLocal()
-    admin = db.query(User).filter(User.email == "3ayoty@gmail.com").first()
-    if not admin:
-        admin = User(
-            email="3ayoty@gmail.com",
-            hashed_password=hash_password("123456789"),
-            full_name="Admin User",
-            role="admin",
-            quota=999
-        )
-        db.add(admin)
-        db.commit()
-    db.close()
-
-init_db()
-
-# Force recreate admin on startup
+# Startup event
 @app.on_event("startup")
 async def startup_event():
     db = SessionLocal()
@@ -369,10 +346,10 @@ async def startup_event():
             )
             db.add(admin)
             db.commit()
-            print("✅ Admin user created successfully")
+            print("✅ Admin user created")
         else:
-            print(f"✅ Admin user exists - email: {admin.email}, role: {admin.role}")
+            print(f"✅ Admin exists: {admin.email}")
     except Exception as e:
-        print(f"❌ Error creating admin: {e}")
+        print(f"❌ Error: {e}")
     finally:
         db.close()
