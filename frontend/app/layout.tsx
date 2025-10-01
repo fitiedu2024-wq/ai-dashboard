@@ -1,18 +1,22 @@
-import './globals.css'
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
 
-export const metadata = {
-  title: 'AI Marketing Dashboard',
-  description: 'AI-powered marketing analytics',
-}
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "AI Grinners - Marketing Intelligence",
+  description: "Advanced AI-powered marketing analysis platform",
+};
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode
-}) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="ar">
-      <body>{children}</body>
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
     </html>
-  )
+  );
 }
