@@ -324,3 +324,21 @@ async def get_stats(admin: User = Depends(get_admin_user), db: Session = Depends
         "completed_jobs": completed_jobs,
         "pending_jobs": total_jobs - completed_jobs
     }
+
+@app.post("/api/admin/users/{user_id}/reset-password")
+async def reset_user_password(
+    user_id: int,
+    request: Request,
+    new_password: dict,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.hashed_password = hash_password(new_password.get('new_password'))
+    db.commit()
+    
+    log_activity(db, request, admin.email, f"reset_password:{user.email}", user_id=admin.id)
+    return {"message": "Password reset successfully"}
