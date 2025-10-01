@@ -1,332 +1,303 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
-from sqlalchemy.orm import Session
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
-import jwt
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy import create_engine, func
+from sqlalchemy.orm import sessionmaker, Session
+from passlib.context import CryptContext
+from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional, List
-import user_agents
-import requests
 import os
+from models import Base, User, ActivityLog, AnalysisJob
+import json
 
-from database import get_db, User, ActivityLog, Job, SessionLocal, engine
+app = FastAPI()
 
-app = FastAPI(title="AI Grinners Dashboard API")
-
-SECRET_KEY = os.getenv("SECRET_KEY", "grinners-secret-key-2025")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-ph = PasswordHasher()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
-
-FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL] if FRONTEND_URL != "*" else ["*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Models
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+# Database
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./grinners.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-class UserResponse(BaseModel):
-    id: int
-    email: str
-    full_name: Optional[str]
-    role: str
-    quota: int
-    is_active: bool
-    created_at: datetime
-    last_login: Optional[datetime]
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base.metadata.create_all(bind=engine)
 
-    class Config:
-        from_attributes = True
+# Security
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 
-class ActivityLogResponse(BaseModel):
-    id: int
-    user_id: Optional[int]
-    email: Optional[str]
-    action: str
-    ip_address: Optional[str]
-    country: Optional[str]
-    city: Optional[str]
-    os: Optional[str]
-    browser: Optional[str]
-    device_type: Optional[str]
-    timestamp: datetime
-    success: bool
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
-    class Config:
-        from_attributes = True
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-    full_name: Optional[str]
-    role: str = "user"
-    quota: int = 15
-
-class UserUpdate(BaseModel):
-    full_name: Optional[str] = None
-    role: Optional[str] = None
-    quota: Optional[int] = None
-    is_active: Optional[bool] = None
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 def hash_password(password: str):
-    return ph.hash(password)
+    return pwd_context.hash(password)
 
-def verify_password(plain_password: str, hashed_password: str):
-    try:
-        ph.verify(hashed_password, plain_password)
-        return True
-    except VerifyMismatchError:
-        return False
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
 
-def create_access_token(data: dict):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_location_from_ip(ip: str):
-    """Get location using free IP geolocation API"""
-    try:
-        if ip in ["127.0.0.1", "localhost", None]:
-            return None, None
-        
-        response = requests.get(f"http://ip-api.com/json/{ip}", timeout=2)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") == "success":
-                return data.get("country"), data.get("city")
-    except:
-        pass
-    return None, None
-
-def log_activity(db: Session, request: Request, email: str, action: str, success: bool = True, user_id: int = None):
-    ua_string = request.headers.get("user-agent", "")
-    ua = user_agents.parse(ua_string)
-    
-    ip_address = request.client.host if request.client else None
-    country, city = get_location_from_ip(ip_address)
-    
-    # Determine device type
-    device_type = "pc"
-    if ua.is_mobile:
-        device_type = "mobile"
-    elif ua.is_tablet:
-        device_type = "tablet"
-    
-    log = ActivityLog(
-        user_id=user_id,
-        email=email,
-        action=action,
-        ip_address=ip_address,
-        country=country,
-        city=city,
-        user_agent=ua_string,
-        os=f"{ua.os.family} {ua.os.version_string}" if ua.os.family else None,
-        browser=f"{ua.browser.family} {ua.browser.version_string}" if ua.browser.family else None,
-        device_type=device_type,
-        success=success
-    )
-    db.add(log)
-    db.commit()
-
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-    except:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     
     user = db.query(User).filter(User.email == email).first()
-    if user is None or not user.is_active:
+    if user is None:
         raise HTTPException(status_code=401, detail="User not found")
     return user
 
-async def get_admin_user(current_user: User = Depends(get_current_user)):
+def get_admin_user(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
-@app.on_event("startup")
-def startup():
-    from database import Base
-    Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
-    try:
-        admin = db.query(User).filter(User.email == "3ayoty@gmail.com").first()
-        if not admin:
-            admin = User(
-                email="3ayoty@gmail.com",
-                hashed_password=hash_password("ALI@TIA@20"),
-                full_name="Admin User",
-                role="admin",
-                quota=999,
-                is_active=True
-            )
-            db.add(admin)
-            db.commit()
-    finally:
-        db.close()
+def log_activity(db: Session, request: Request, action: str, user_id: int = None):
+    log = ActivityLog(
+        user_id=user_id,
+        action=action,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent", "")
+    )
+    db.add(log)
+    db.commit()
 
 @app.get("/")
-def root():
-    return {"status": "ok", "message": "AI Grinners Dashboard API"}
+def read_root():
+    return {"message": "Grinners.ai API - Crafting Smiles through Marketing"}
 
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
-
-@app.post("/api/token", response_model=Token)
-async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@app.post("/api/token")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db), request: Request = None):
     user = db.query(User).filter(User.email == form_data.username).first()
-    
     if not user or not verify_password(form_data.password, user.hashed_password):
-        log_activity(db, request, form_data.username, "login_failed", success=False)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
     
     if not user.is_active:
-        log_activity(db, request, form_data.username, "login_inactive", success=False, user_id=user.id)
-        raise HTTPException(status_code=401, detail="Account inactive")
+        raise HTTPException(status_code=403, detail="User account is deactivated")
     
     user.last_login = datetime.utcnow()
     db.commit()
     
-    log_activity(db, request, user.email, "login_success", user_id=user.id)
+    log_activity(db, request, "login", user.id)
     
-    access_token = create_access_token(data={"sub": user.email})
+    access_token = create_access_token(
+        data={"sub": user.email},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/api/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+@app.get("/api/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "quota": current_user.quota,
+        "created_at": current_user.created_at.isoformat()
+    }
 
-@app.get("/api/admin/users", response_model=List[UserResponse])
-async def get_users(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
-    return db.query(User).all()
-
-@app.get("/api/admin/users/{user_id}/activity", response_model=List[ActivityLogResponse])
-async def get_user_activity(
-    user_id: int,
-    admin: User = Depends(get_admin_user),
-    db: Session = Depends(get_db),
-    limit: int = 50
-):
-    """Get activity logs for specific user"""
-    return db.query(ActivityLog).filter(ActivityLog.user_id == user_id).order_by(ActivityLog.timestamp.desc()).limit(limit).all()
-
-@app.post("/api/admin/users", response_model=UserResponse)
-async def create_user(
-    user_data: UserCreate,
+# Analysis Endpoints
+@app.post("/api/analyze")
+async def create_analysis(
+    domain: dict,
     request: Request,
-    admin: User = Depends(get_admin_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    existing = db.query(User).filter(User.email == user_data.email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already exists")
+    if current_user.quota <= 0:
+        raise HTTPException(status_code=403, detail="Quota exceeded")
     
-    new_user = User(
-        email=user_data.email,
-        hashed_password=hash_password(user_data.password),
-        full_name=user_data.full_name,
-        role=user_data.role,
-        quota=user_data.quota
+    domain_name = domain.get("domain", "").strip().lower()
+    if not domain_name:
+        raise HTTPException(status_code=400, detail="Domain is required")
+    
+    # Remove http/https
+    domain_name = domain_name.replace("https://", "").replace("http://", "").split("/")[0]
+    
+    # Create analysis job
+    job = AnalysisJob(
+        user_id=current_user.id,
+        domain=domain_name,
+        status="processing"
     )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    db.add(job)
     
-    log_activity(db, request, admin.email, f"created_user:{user_data.email}", user_id=admin.id)
-    return new_user
+    # Decrease quota
+    current_user.quota -= 1
+    db.commit()
+    db.refresh(job)
+    
+    log_activity(db, request, f"analysis_started:{domain_name}", current_user.id)
+    
+    # TODO: Trigger actual analysis (we'll do this next)
+    # For now, mock results
+    mock_results = {
+        "domain": domain_name,
+        "seo_score": 85,
+        "performance_score": 90,
+        "content_quality": 78,
+        "social_presence": 82,
+        "recommendations": [
+            "Improve meta descriptions",
+            "Add more backlinks",
+            "Optimize images for faster loading"
+        ]
+    }
+    
+    job.results = json.dumps(mock_results)
+    job.status = "completed"
+    job.completed_at = datetime.utcnow()
+    db.commit()
+    
+    return {"job_id": job.id, "status": job.status, "message": "Analysis started"}
 
-@app.put("/api/admin/users/{user_id}", response_model=UserResponse)
-async def update_user(
-    user_id: int,
-    user_data: UserUpdate,
-    request: Request,
-    admin: User = Depends(get_admin_user),
+@app.get("/api/jobs")
+def get_user_jobs(
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    jobs = db.query(AnalysisJob).filter(AnalysisJob.user_id == current_user.id).order_by(AnalysisJob.created_at.desc()).all()
     
-    if user_data.full_name is not None:
-        user.full_name = user_data.full_name
-    if user_data.role is not None:
-        user.role = user_data.role
-    if user_data.quota is not None:
-        user.quota = user_data.quota
-    if user_data.is_active is not None:
-        user.is_active = user_data.is_active
-    
-    db.commit()
-    db.refresh(user)
-    
-    log_activity(db, request, admin.email, f"updated_user:{user.email}", user_id=admin.id)
-    return user
+    return [{
+        "id": job.id,
+        "domain": job.domain,
+        "status": job.status,
+        "created_at": job.created_at.isoformat(),
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        "results": json.loads(job.results) if job.results else None
+    } for job in jobs]
 
-@app.delete("/api/admin/users/{user_id}")
-async def delete_user(
-    user_id: int,
-    request: Request,
-    admin: User = Depends(get_admin_user),
+@app.get("/api/jobs/{job_id}")
+def get_job_details(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    job = db.query(AnalysisJob).filter(
+        AnalysisJob.id == job_id,
+        AnalysisJob.user_id == current_user.id
+    ).first()
     
-    if user.role == "admin" and user.id == admin.id:
-        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
     
-    email = user.email
-    db.delete(user)
-    db.commit()
-    
-    log_activity(db, request, admin.email, f"deleted_user:{email}", user_id=admin.id)
-    return {"message": "User deleted"}
+    return {
+        "id": job.id,
+        "domain": job.domain,
+        "status": job.status,
+        "created_at": job.created_at.isoformat(),
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        "results": json.loads(job.results) if job.results else None,
+        "error_message": job.error_message
+    }
 
-@app.get("/api/admin/activity", response_model=List[ActivityLogResponse])
-async def get_activity_logs(
-    admin: User = Depends(get_admin_user),
-    db: Session = Depends(get_db),
-    limit: int = 100
-):
-    return db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(limit).all()
-
+# Admin endpoints (existing ones)
 @app.get("/api/admin/stats")
-async def get_stats(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
-    total_users = db.query(User).count()
-    active_users = db.query(User).filter(User.is_active == True).count()
-    total_jobs = db.query(Job).count()
-    completed_jobs = db.query(Job).filter(Job.status == "completed").count()
+def get_admin_stats(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    total_users = db.query(func.count(User.id)).scalar()
+    active_users = db.query(func.count(User.id)).filter(User.is_active == True).scalar()
+    admin_users = db.query(func.count(User.id)).filter(User.role == "admin").scalar()
+    total_quota = db.query(func.sum(User.quota)).scalar() or 0
+    total_jobs = db.query(func.count(AnalysisJob.id)).scalar()
+    completed_jobs = db.query(func.count(AnalysisJob.id)).filter(AnalysisJob.status == "completed").scalar()
     
     return {
         "total_users": total_users,
         "active_users": active_users,
-        "inactive_users": total_users - active_users,
+        "admin_users": admin_users,
+        "total_quota": total_quota,
         "total_jobs": total_jobs,
-        "completed_jobs": completed_jobs,
-        "pending_jobs": total_jobs - completed_jobs
+        "completed_jobs": completed_jobs
     }
 
+@app.get("/api/admin/users")
+def get_all_users(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return [{
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+        "quota": user.quota,
+        "is_active": user.is_active,
+        "created_at": user.created_at.isoformat(),
+        "last_login": user.last_login.isoformat() if user.last_login else None
+    } for user in users]
+
+@app.post("/api/admin/users")
+def create_user(
+    user_data: dict,
+    request: Request,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    existing_user = db.query(User).filter(User.email == user_data["email"]).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    new_user = User(
+        email=user_data["email"],
+        hashed_password=hash_password(user_data["password"]),
+        full_name=user_data.get("full_name"),
+        role=user_data.get("role", "user"),
+        quota=user_data.get("quota", 15)
+    )
+    db.add(new_user)
+    db.commit()
+    
+    log_activity(db, request, f"user_created:{user_data['email']}", admin.id)
+    
+    return {"message": "User created successfully"}
+
+@app.put("/api/admin/users/{user_id}")
+def update_user(
+    user_id: int,
+    updates: dict,
+    request: Request,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    for key, value in updates.items():
+        if hasattr(user, key) and key != "id":
+            setattr(user, key, value)
+    
+    db.commit()
+    log_activity(db, request, f"user_updated:{user.email}", admin.id)
+    
+    return {"message": "User updated successfully"}
+
 @app.post("/api/admin/users/{user_id}/reset-password")
-async def reset_user_password(
+def reset_user_password(
     user_id: int,
     request: Request,
     new_password: dict,
@@ -340,5 +311,43 @@ async def reset_user_password(
     user.hashed_password = hash_password(new_password.get('new_password'))
     db.commit()
     
-    log_activity(db, request, admin.email, f"reset_password:{user.email}", user_id=admin.id)
+    log_activity(db, request, f"reset_password:{user.email}", admin.id)
     return {"message": "Password reset successfully"}
+
+@app.get("/api/admin/activity")
+def get_activity_logs(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    logs = db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(100).all()
+    
+    result = []
+    for log in logs:
+        user = db.query(User).filter(User.id == log.user_id).first()
+        result.append({
+            "id": log.id,
+            "user_email": user.email if user else "Unknown",
+            "action": log.action,
+            "ip_address": log.ip_address,
+            "timestamp": log.timestamp.isoformat()
+        })
+    
+    return result
+
+# Initialize admin user
+def init_db():
+    db = SessionLocal()
+    admin = db.query(User).filter(User.email == "3ayoty@gmail.com").first()
+    if not admin:
+        admin = User(
+            email="3ayoty@gmail.com",
+            hashed_password=hash_password("123456789"),
+            full_name="Admin User",
+            role="admin",
+            quota=999
+        )
+        db.add(admin)
+        db.commit()
+    db.close()
+
+init_db()
