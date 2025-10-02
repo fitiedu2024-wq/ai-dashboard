@@ -1,11 +1,12 @@
 import requests
 import os
 from urllib.parse import urlparse
+from competitor_analyzer import find_competitors, analyze_competitor_pages
 
 SCRAPER_URL = os.getenv("SCRAPER_SERVICE_URL", "http://34.63.165.165:8080")
 
 def analyze_domain(domain: str) -> dict:
-    """Enhanced domain analysis using VM scraper"""
+    """Enhanced domain analysis using VM scraper + competitors"""
     
     # Clean domain
     domain = domain.replace("https://", "").replace("http://", "").split("/")[0]
@@ -17,7 +18,8 @@ def analyze_domain(domain: str) -> dict:
         "scores": {},
         "platform": {},
         "trackers": {},
-        "recommendations": []
+        "recommendations": [],
+        "competitors": []
     }
     
     try:
@@ -63,6 +65,19 @@ def analyze_domain(domain: str) -> dict:
             results["recommendations"] = generate_recommendations(
                 seo_score, marketing_score, tracker_info, platform_info
             )
+            
+            # NEW: Competitor Analysis
+            try:
+                competitors = find_competitors(domain, page_info, max_results=4)
+                
+                # Analyze each competitor in detail
+                for comp in competitors:
+                    detailed_comp = analyze_competitor_pages(comp)
+                    results["competitors"].append(detailed_comp)
+                    
+            except Exception as comp_err:
+                print(f"Competitor analysis error: {comp_err}")
+                results["competitors"] = []
             
         else:
             # Fallback to basic analysis
@@ -203,5 +218,6 @@ def basic_analysis(domain: str) -> dict:
             "issue": "Could not fetch detailed data",
             "recommendation": "Ensure website is accessible and try again",
             "impact": "Better analysis results"
-        }]
+        }],
+        "competitors": []
     }
