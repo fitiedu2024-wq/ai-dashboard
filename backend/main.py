@@ -446,3 +446,46 @@ async def seo_comparison_endpoint(
         return {"success": True, "data": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# HISTORY TRACKING ENDPOINTS
+# ==========================================
+from history_tracker import save_analysis, get_history, compare_with_history
+
+@app.get("/api/analysis-history/{domain}")
+async def get_analysis_history(
+    domain: str,
+    analysis_type: str = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Get analysis history for a domain"""
+    try:
+        history = get_history(domain, analysis_type)
+        return {"success": True, "data": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/compare-history")
+async def compare_with_history_endpoint(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """Compare current analysis with historical data"""
+    try:
+        body = await request.json()
+        domain = body.get('domain')
+        current_results = body.get('results')
+        analysis_type = body.get('type', 'general')
+        
+        if not domain or not current_results:
+            raise HTTPException(status_code=400, detail="domain and results required")
+        
+        # Save current analysis
+        save_analysis(domain, analysis_type, current_results)
+        
+        # Compare with history
+        comparison = compare_with_history(domain, current_results, analysis_type)
+        
+        return {"success": True, "data": comparison}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
