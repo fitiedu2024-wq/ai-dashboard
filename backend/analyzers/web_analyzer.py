@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from competitor_analyzer import find_competitors, analyze_competitor_pages
 
 def analyze_domain(domain: str) -> dict:
+    """Analyze domain with multi-page crawling"""
     if not domain.startswith(('http://', 'https://')):
         domain = f'https://{domain}'
     
@@ -22,18 +23,88 @@ def analyze_domain(domain: str) -> dict:
         'seo': {},
         'recommendations': [],
         'scores': {},
-        'competitors': []
+        'competitors': [],
+        'analyzed_pages': []
     }
     
     try:
+        # Get important pages to analyze
+        print(f"Getting pages for {domain}")
+        pages_to_analyze = get_pages_to_analyze(domain, max_pages=20)
+        
+        # Analyze each page
+        all_keywords = []
+        all_h1s = []
+        all_h2s = []
+        seo_issues = {'missing_title': 0, 'missing_description': 0, 'missing_h1': 0}
+        
+        for page_url in pages_to_analyze:
+            try:
+                print(f"Analyzing: {page_url}")
+                response = requests.get(page_url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Extract page data
+                title = soup.find('title')
+                title_text = title.get_text().strip() if title else ''
+                
+                meta_desc = soup.find('meta', attrs={'name': 'description'})
+                description = meta_desc.get('content', '') if meta_desc else ''
+                
+                h1 = soup.find('h1')
+                h1_text = h1.get_text().strip() if h1 else ''
+                
+                h2s = [h2.get_text().strip() for h2 in soup.find_all('h2')[:5]]
+                
+                # Extract keywords (simple version)
+                body_text = soup.get_text().lower()
+                words = re.findall(r'\w{4,}', body_text)
+                all_keywords.extend(words)
+                
+                # Track SEO issues
+                if not title_text:
+                    seo_issues['missing_title'] += 1
+                if not description:
+                    seo_issues['missing_description'] += 1
+                if not h1_text:
+                    seo_issues['missing_h1'] += 1
+                
+                all_h1s.append(h1_text)
+                all_h2s.extend(h2s)
+                
+                # Store page analysis
+                results['analyzed_pages'].append({
+                    'url': page_url,
+                    'title': title_text,
+                    'description': description,
+                    'h1': h1_text
+                })
+                
+            except Exception as e:
+                print(f"Error analyzing {page_url}: {e}")
+                continue
+        
+        # Aggregate results
+        from collections import Counter
+        keyword_freq = Counter(all_keywords).most_common(30)
+        results['top_keywords'] = [{'word': word, 'count': count} for word, count in keyword_freq]
+        
+        # Analyze main page for technical details
         response = requests.get(domain, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
         html = response.text
         soup = BeautifulSoup(html, 'html.parser')
         
         results['technical'] = analyze_technical(response)
         results['platform'] = detect_platform(html, soup)
-        results['trackers'] = detect_trackers_with_ids(html)  # NEW: with IDs
-        results['seo'] = analyze_seo(soup, html, response)
+        results['trackers'] = detect_trackers_with_ids(html)
+        results['seo'] = {
+            'title': soup.find('title').get_text() if soup.find('title') else '',
+            'meta_description': soup.find('meta', attrs={'name': 'description'}).get('content') if soup.find('meta', attrs={'name': 'description'}) else '',
+            'h1_tags': all_h1s[:10],
+            'seo_issues': seo_issues,
+            'total_pages_analyzed': len(pages_to_analyze)
+        }
+        
         results['scores'] = calculate_scores(results)
         results['recommendations'] = generate_recommendations(results)
         
@@ -41,13 +112,15 @@ def analyze_domain(domain: str) -> dict:
         try:
             page_info = {
                 'title': results['seo'].get('title', ''),
-                'meta': {'description': results['seo'].get('meta_description', '')}
+                'meta': {'description': results['seo'].get('meta_description', '')},
+                'keywords': [kw['word'] for kw in results.get('top_keywords', [])[:20]]
             }
             
+            from competitor_analyzer import find_competitors, analyze_competitor_pages
             competitors = find_competitors(
                 domain.replace('https://', '').replace('http://', '').split('/')[0],
                 page_info,
-                max_results=5  # Changed to 5
+                max_results=5
             )
             
             for comp in competitors:
@@ -64,6 +137,7 @@ def analyze_domain(domain: str) -> dict:
         results['error'] = str(e)
     
     return results
+
 
 def analyze_technical(response):
     return {
