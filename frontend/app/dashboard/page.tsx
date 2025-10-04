@@ -283,7 +283,6 @@ export default function Dashboard() {
 
                   {selectedJob?.id === job.id && job.results && (
                     <div className="mt-6 space-y-6">
-                      {/* Platform Detection */}
                       {job.results.platform && (
                         <div className="p-4 bg-white/5 rounded-xl">
                           <h5 className="text-lg font-bold text-white mb-3">🏗️ Platform Detection</h5>
@@ -302,7 +301,6 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {/* Trackers with IDs */}
                       {job.results.trackers && job.results.trackers.active_count > 0 && (
                         <div className="p-4 bg-white/5 rounded-xl">
                           <h5 className="text-lg font-bold text-white mb-3">📊 Marketing Trackers ({job.results.trackers.active_count})</h5>
@@ -330,36 +328,26 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {/* Competitors */}
                       {job.results.competitors && job.results.competitors.length > 0 && (
                         <div className="p-4 bg-white/5 rounded-xl">
-                          <h5 className="text-lg font-bold text-white mb-4">🏢 Competitors Analysis ({job.results.competitors.length})</h5>
+                          <h5 className="text-lg font-bold text-white mb-4">🏢 Competitors ({job.results.competitors.length})</h5>
                           <div className="space-y-4">
                             {job.results.competitors.map((comp: any, idx: number) => (
                               <div key={idx} className="p-5 bg-gradient-to-r from-purple-700/20 to-blue-700/20 rounded-lg border border-purple-500/30">
                                 <div className="flex justify-between items-start mb-3">
                                   <div className="flex-1">
-                                    
-                                      href={comp.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-white font-bold text-lg hover:text-purple-300 transition"
-                                    >
+                                    <a href={comp.url} target="_blank" rel="noopener noreferrer" className="text-white font-bold text-lg hover:text-purple-300">
                                       {comp.domain}
                                     </a>
                                     <p className="text-purple-200 text-sm mt-1">{comp.title}</p>
                                   </div>
                                   {comp.relevance_score && (
                                     <span className="px-3 py-1 bg-purple-600 text-white rounded-full text-xs font-bold ml-4">
-                                      Relevance: {comp.relevance_score}
+                                      Score: {comp.relevance_score}
                                     </span>
                                   )}
                                 </div>
-                                
-                                {comp.snippet && (
-                                  <p className="text-gray-300 text-sm mb-3 italic">{comp.snippet}</p>
-                                )}
-                                
+                                {comp.snippet && <p className="text-gray-300 text-sm mb-3 italic">{comp.snippet}</p>}
                                 {comp.pages && comp.pages.length > 0 && (
                                   <div className="mt-4 pt-4 border-t border-purple-500/30">
                                     <p className="text-xs text-purple-300 font-semibold mb-3">Analyzed Pages:</p>
@@ -367,12 +355,8 @@ export default function Dashboard() {
                                       {comp.pages.map((page: any, pidx: number) => (
                                         <div key={pidx} className="p-3 bg-black/30 rounded border border-white/10">
                                           <p className="text-white font-medium text-sm">{page.title}</p>
-                                          {page.h1 && (
-                                            <p className="text-purple-300 text-xs mt-1">H1: {page.h1}</p>
-                                          )}
-                                          {page.description && (
-                                            <p className="text-gray-400 text-xs mt-2">{page.description.substring(0, 120)}...</p>
-                                          )}
+                                          {page.h1 && <p className="text-purple-300 text-xs mt-1">H1: {page.h1}</p>}
+                                          {page.description && <p className="text-gray-400 text-xs mt-2">{page.description.substring(0, 120)}...</p>}
                                         </div>
                                       ))}
                                     </div>
@@ -384,7 +368,6 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {/* Recommendations */}
                       {job.results.recommendations && job.results.recommendations.length > 0 && (
                         <div className="p-4 bg-white/5 rounded-xl">
                           <h5 className="text-lg font-bold text-white mb-4">💡 AI Recommendations</h5>
