@@ -398,3 +398,51 @@ async def analyze_ads_endpoint(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# DEEP ANALYSIS ENDPOINTS
+# ==========================================
+from keyword_analyzer import analyze_keywords
+from seo_comparator import compare_seo
+
+@app.post("/api/keyword-analysis")
+async def keyword_analysis_endpoint(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Deep keyword analysis vs competitors"""
+    try:
+        body = await request.json()
+        your_domain = body.get('your_domain')
+        competitors = body.get('competitors', [])
+        
+        if not your_domain or not competitors:
+            raise HTTPException(status_code=400, detail="your_domain and competitors required")
+        
+        results = analyze_keywords(your_domain, competitors)
+        
+        return {"success": True, "data": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/seo-comparison")
+async def seo_comparison_endpoint(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Side-by-side SEO comparison"""
+    try:
+        body = await request.json()
+        your_domain = body.get('your_domain')
+        competitors = body.get('competitors', [])
+        
+        if not your_domain or not competitors:
+            raise HTTPException(status_code=400, detail="your_domain and competitors required")
+        
+        results = compare_seo(your_domain, competitors)
+        
+        return {"success": True, "data": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
