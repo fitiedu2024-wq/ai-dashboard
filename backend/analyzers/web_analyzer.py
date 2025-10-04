@@ -438,9 +438,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from pagespeed_analyzer import get_pagespeed_insights
     from enhanced_analyzer import generate_master_report
-from ai_analyzer import generate_ai_report
+    from ai_analyzer import generate_ai_report
 except ImportError:
     def generate_ai_report(data):
         return {}
     def get_pagespeed_insights(url):
+        return {}
+    def generate_master_report(data):
         return {}
