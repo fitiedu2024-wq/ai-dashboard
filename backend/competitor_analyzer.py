@@ -4,9 +4,9 @@ from typing import List, Dict
 from urllib.parse import urlparse
 import re
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyBdtRUNhrCrLByK2u3_EHmyAxc8xl8bqTg")
-GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID", "13ade16a282a740d5")
-SCRAPER_URL = os.getenv("SCRAPER_SERVICE_URL", "http://34.63.165.165:8080")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID")
+SCRAPER_URL = os.getenv("SCRAPER_SERVICE_URL")
 
 BLACKLIST = [
     'amazon', 'noon.com', 'jumia', 'namshi', 'ebay', 'alibaba', 
