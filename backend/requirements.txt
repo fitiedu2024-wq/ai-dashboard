@@ -12,3 +12,8 @@ lxml==5.3.0
 google-cloud-aiplatform
 google-cloud-aiplatform
 google-cloud-aiplatform
+google-cloud-vision
+google-cloud-language
+google-cloud-tasks
+pillow
+pyppeteer
