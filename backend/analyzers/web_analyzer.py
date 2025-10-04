@@ -137,6 +137,15 @@ def analyze_domain(domain: str) -> dict:
         results['status'] = 'failed'
         results['error'] = str(e)
     
+    
+        # Generate AI insights
+        try:
+            ai_report = generate_ai_report(results)
+            results['ai_insights'] = ai_report
+        except Exception as ai_err:
+            print(f"AI generation error: {ai_err}")
+            results['ai_insights'] = {}
+    
     return results
 
 
@@ -408,4 +417,12 @@ except ImportError:
     def get_competitor_ads(domain, country="AE"):
         return []
     def analyze_ad_strategy(ads):
+        return {}
+
+# Import AI analyzer
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from ai_analyzer import generate_ai_report
+except ImportError:
+    def generate_ai_report(data):
         return {}
