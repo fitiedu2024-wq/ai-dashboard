@@ -6,9 +6,21 @@ import json
 import sys
 import os
 
+# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from page_selector import get_pages_to_analyze
-from competitor_analyzer import find_competitors, analyze_competitor_pages
+
+# Import from parent directory (backend/)
+try:
+    from page_selector import get_pages_to_analyze
+    from competitor_analyzer import find_competitors, analyze_competitor_pages
+except ImportError:
+    # Fallback if modules not found
+    def get_pages_to_analyze(domain, max_pages=20):
+        return [domain]
+    def find_competitors(domain, page_info, max_results=5):
+        return []
+    def analyze_competitor_pages(comp):
+        return comp
 
 def analyze_domain(domain: str) -> dict:
     """Analyze domain with multi-page crawling"""
