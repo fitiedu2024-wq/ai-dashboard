@@ -138,6 +138,13 @@ def analyze_domain(domain: str) -> dict:
         results['error'] = str(e)
     
     
+        # Get PageSpeed Insights
+        try:
+            pagespeed_data = get_pagespeed_insights(domain)
+            results['pagespeed'] = pagespeed_data
+        except Exception as ps_err:
+            print(f"PageSpeed error: {ps_err}")
+        
         # Generate AI insights
         try:
             ai_report = generate_ai_report(results)
@@ -422,7 +429,8 @@ except ImportError:
 # Import AI analyzer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from ai_analyzer import generate_ai_report
+    from pagespeed_analyzer import get_pagespeed_insights
+from ai_analyzer import generate_ai_report
 except ImportError:
     def generate_ai_report(data):
         return {}
