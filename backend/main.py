@@ -547,12 +547,12 @@ async def analyze_async(
         # Create job
         job_id = str(uuid.uuid4())
         job_queue.enqueue(
-            job_id=job_id,
-            domain=domain,
-            analysis_type='deep_analysis',
-            func=run_deep_analysis,
-            domain=domain,
-            competitors=competitors
+            job_id,
+            'deep_analysis',
+            run_deep_analysis,
+            domain,
+            competitors,
+            domain=domain
         )
         
         return {
@@ -608,10 +608,10 @@ async def deep_analysis_endpoint(
         # Create background job
         job_id = str(uuid.uuid4())
         job_queue.enqueue(
-            job_id=job_id,
-            domain=domain,
-            analysis_type='deep_site_analysis',
-            func=full_site_analysis,
+            job_id,
+            domain,
+            'deep_site_analysis',
+            full_site_analysis,
             domain,
             competitors
         )

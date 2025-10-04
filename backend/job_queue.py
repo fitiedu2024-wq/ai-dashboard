@@ -85,7 +85,7 @@ class JobQueue:
         finally:
             db.close()
     
-    def enqueue(self, job_id: str, domain: str, analysis_type: str, func: Callable, *args) -> str:
+    def enqueue(self, job_id: str, analysis_type: str, func: Callable, *args, **kwargs) -> str:
         """Add job to queue"""
         from sqlalchemy.orm import sessionmaker
         Session = sessionmaker(bind=engine)
@@ -95,7 +95,7 @@ class JobQueue:
         db_job = AnalysisJob(
             job_id=job_id,
             status='pending',
-            domain=domain,
+            domain=kwargs.get('domain', 'unknown'),
             analysis_type=analysis_type
         )
         db.add(db_job)
