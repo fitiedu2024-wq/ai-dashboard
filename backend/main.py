@@ -353,3 +353,48 @@ async def startup_event():
         print(f"❌ Error: {e}")
     finally:
         db.close()
+
+# ==========================================
+# ADS LIBRARY ANALYSIS ENDPOINT
+# ==========================================
+from unified_ads_analyzer import analyze_competitor_ads
+
+@app.post("/api/analyze-ads")
+async def analyze_ads_endpoint(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Analyze competitor ads across platforms
+    - Meta (Facebook/Instagram): API-powered
+    - TikTok: Manual search URL
+    - Google Ads: Manual search URL
+    """
+    try:
+        body = await request.json()
+        domain = body.get('domain')
+        brand_name = body.get('brand_name')
+        
+        if not domain:
+            raise HTTPException(status_code=400, detail="Domain is required")
+        
+        # Analyze ads
+        results = analyze_competitor_ads(domain, brand_name)
+        
+        # Log activity
+        log = ActivityLog(
+            user_id=current_user.id,
+            action="analyze_ads",
+            details=f"Analyzed ads for {domain}"
+        )
+        db.add(log)
+        db.commit()
+        
+        return {
+            "success": True,
+            "data": results
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
