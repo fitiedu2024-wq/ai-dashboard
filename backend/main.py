@@ -579,3 +579,49 @@ async def get_job_status(
         cache.set(cache_key, status['result'])
     
     return {"success": True, "data": status}
+
+# ==========================================
+# ENHANCED DEEP ANALYSIS
+# ==========================================
+from enhanced_analyzer import full_site_analysis
+
+@app.post("/api/deep-analysis")
+async def deep_analysis_endpoint(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """Full deep site analysis with multi-page crawl"""
+    try:
+        body = await request.json()
+        domain = body.get('domain')
+        competitors = body.get('competitors', [])
+        
+        if not domain:
+            raise HTTPException(400, "Domain required")
+        
+        # Check cache
+        cache_key = f"deep:{domain}:{','.join(competitors)}"
+        cached = cache.get(cache_key)
+        if cached:
+            return {"success": True, "data": cached, "from_cache": True}
+        
+        # Create background job
+        job_id = str(uuid.uuid4())
+        job_queue.enqueue(
+            job_id=job_id,
+            domain=domain,
+            analysis_type='deep_site_analysis',
+            func=full_site_analysis,
+            domain,
+            competitors
+        )
+        
+        return {
+            "success": True,
+            "job_id": job_id,
+            "estimated_time": "2-3 minutes",
+            "status_endpoint": f"/api/job-status/{job_id}"
+        }
+        
+    except Exception as e:
+        raise HTTPException(500, str(e))
