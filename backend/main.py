@@ -489,3 +489,93 @@ async def compare_with_history_endpoint(
         return {"success": True, "data": comparison}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# ASYNC ANALYSIS WITH JOBS
+# ==========================================
+from job_queue import job_queue
+from simple_cache import cache
+import uuid
+
+def run_deep_analysis(domain: str, competitors: list):
+    """Background job function"""
+    from analyzers import analyze_domain
+    from competitor_analyzer import find_competitors, analyze_competitor_pages
+    from gemini_analyzer import analyze_with_gemini
+    
+    # Your site analysis
+    your_data = analyze_domain(domain)
+    
+    # Competitor analysis
+    comp_data = []
+    for comp in competitors[:3]:
+        try:
+            comp_analysis = analyze_domain(comp)
+            comp_data.append(comp_analysis)
+        except:
+            continue
+    
+    # Gemini intelligence
+    gemini_insights = analyze_with_gemini(your_data, comp_data)
+    
+    return {
+        'your_site': your_data,
+        'competitors': comp_data,
+        'ai_insights': gemini_insights
+    }
+
+@app.post("/api/analyze-async")
+async def analyze_async(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """Start async analysis job"""
+    try:
+        body = await request.json()
+        domain = body.get('domain')
+        competitors = body.get('competitors', [])
+        
+        if not domain:
+            raise HTTPException(400, "Domain required")
+        
+        # Check cache
+        cache_key = f"analysis:{domain}"
+        cached = cache.get(cache_key)
+        if cached:
+            return {"success": True, "data": cached, "from_cache": True}
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        job_queue.enqueue(
+            job_id=job_id,
+            domain=domain,
+            analysis_type='deep_analysis',
+            func=run_deep_analysis,
+            domain=domain,
+            competitors=competitors
+        )
+        
+        return {
+            "success": True,
+            "job_id": job_id,
+            "message": "Analysis started in background",
+            "status_endpoint": f"/api/job-status/{job_id}"
+        }
+        
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.get("/api/job-status/{job_id}")
+async def get_job_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get job status and results"""
+    status = job_queue.get_status(job_id)
+    
+    # Cache completed results
+    if status.get('status') == 'completed' and status.get('result'):
+        cache_key = f"analysis:{status.get('domain')}"
+        cache.set(cache_key, status['result'])
+    
+    return {"success": True, "data": status}
