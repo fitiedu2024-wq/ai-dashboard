@@ -15,6 +15,6 @@ google-cloud-aiplatform
 google-cloud-vision
 google-cloud-language
 google-cloud-tasks
-pillow
+pillow==11.0.0
 pyppeteer
 google-generativeai
