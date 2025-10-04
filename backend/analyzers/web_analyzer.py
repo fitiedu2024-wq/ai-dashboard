@@ -7,6 +7,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from page_selector import get_pages_to_analyze
 from competitor_analyzer import find_competitors, analyze_competitor_pages
 
 def analyze_domain(domain: str) -> dict:
