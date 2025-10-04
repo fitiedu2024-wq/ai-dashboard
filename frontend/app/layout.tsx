@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
+import Sidebar from "./components/Sidebar";
 
 export const metadata: Metadata = {
-  title: "AI Grinners - Marketing Intelligence",
-  description: "Advanced AI-powered marketing analysis platform",
+  title: "AI Marketing Dashboard",
+  description: "Competitor analysis and marketing intelligence",
 };
 
 export default function RootLayout({
@@ -16,7 +14,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body>
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1 bg-gray-50">
+            {children}
+          </main>
+        </div>
+      </body>
     </html>
   );
 }
