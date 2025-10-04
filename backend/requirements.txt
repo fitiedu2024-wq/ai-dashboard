@@ -17,3 +17,4 @@ google-cloud-language
 google-cloud-tasks
 pillow
 pyppeteer
+google-generativeai

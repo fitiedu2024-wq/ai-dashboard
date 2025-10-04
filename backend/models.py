@@ -38,3 +38,6 @@ class AnalysisJob(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+
+# Export engine for job_queue
+engine = create_engine(DATABASE_URL)
