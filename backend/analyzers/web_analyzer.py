@@ -6,15 +6,10 @@ import json
 import sys
 import os
 
-# Add parent directory to path to import competitor_analyzer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from competitor_analyzer import find_competitors, analyze_competitor_pages
 
 def analyze_domain(domain: str) -> dict:
-    """
-    Comprehensive domain analysis with competitors
-    """
-    # Ensure domain has protocol
     if not domain.startswith(('http://', 'https://')):
         domain = f'https://{domain}'
     
@@ -31,30 +26,18 @@ def analyze_domain(domain: str) -> dict:
     }
     
     try:
-        # Fetch page
         response = requests.get(domain, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
         html = response.text
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Technical analysis
         results['technical'] = analyze_technical(response)
-        
-        # Platform detection
         results['platform'] = detect_platform(html, soup)
-        
-        # Tracker detection
-        results['trackers'] = detect_trackers(html)
-        
-        # SEO analysis
+        results['trackers'] = detect_trackers_with_ids(html)  # NEW: with IDs
         results['seo'] = analyze_seo(soup, html, response)
-        
-        # Generate scores
         results['scores'] = calculate_scores(results)
-        
-        # Generate recommendations
         results['recommendations'] = generate_recommendations(results)
         
-        # NEW: Competitor analysis
+        # Competitor analysis
         try:
             page_info = {
                 'title': results['seo'].get('title', ''),
@@ -64,10 +47,9 @@ def analyze_domain(domain: str) -> dict:
             competitors = find_competitors(
                 domain.replace('https://', '').replace('http://', '').split('/')[0],
                 page_info,
-                max_results=4
+                max_results=5  # Changed to 5
             )
             
-            # Analyze each competitor
             for comp in competitors:
                 detailed_comp = analyze_competitor_pages(comp)
                 results['competitors'].append(detailed_comp)
@@ -132,36 +114,111 @@ def detect_platform(html, soup):
         'is_ecommerce': is_ecommerce
     }
 
-def detect_trackers(html):
-    html_lower = html.lower()
+def detect_trackers_with_ids(html):
+    """Detect trackers AND extract their IDs"""
     
-    tracker_map = {
-        'google_analytics': ['google-analytics', 'gtag'],
-        'google_tag_manager': ['googletagmanager'],
-        'facebook_pixel': ['facebook.net/tr', 'fbq'],
-        'tiktok_pixel': ['tiktok.com/i18n/pixel'],
-        'snapchat_pixel': ['snapchat.com/pixel'],
-        'twitter_pixel': ['static.ads-twitter.com'],
-        'hotjar': ['hotjar.com'],
-        'linkedin_insight': ['snap.licdn.com'],
-        'google_ads': ['googleadservices']
+    trackers_found = {}
+    
+    # Google Analytics (GA4 and Universal)
+    ga_patterns = [
+        r"G-[A-Z0-9]{10}",  # GA4
+        r"UA-\d{4,10}-\d{1,4}",  # Universal Analytics
+        r"gtag\('config',\s*'([^']+)'\)"
+    ]
+    ga_ids = []
+    for pattern in ga_patterns:
+        matches = re.findall(pattern, html)
+        ga_ids.extend(matches)
+    
+    trackers_found['google_analytics'] = {
+        'active': len(ga_ids) > 0,
+        'ids': list(set(ga_ids))
     }
     
-    active = {}
-    active_list = []
+    # Google Tag Manager
+    gtm_pattern = r"GTM-[A-Z0-9]+"
+    gtm_ids = re.findall(gtm_pattern, html)
+    trackers_found['google_tag_manager'] = {
+        'active': len(gtm_ids) > 0,
+        'ids': list(set(gtm_ids))
+    }
     
-    for tracker, sigs in tracker_map.items():
-        found = any(sig in html_lower for sig in sigs)
-        active[tracker] = found
-        if found:
-            active_list.append(tracker)
+    # Facebook Pixel
+    fb_patterns = [
+        r"fbq\('init',\s*'(\d+)'\)",
+        r"facebook\.net/tr\?id=(\d+)"
+    ]
+    fb_ids = []
+    for pattern in fb_patterns:
+        matches = re.findall(pattern, html)
+        fb_ids.extend(matches)
+    
+    trackers_found['facebook_pixel'] = {
+        'active': len(fb_ids) > 0,
+        'ids': list(set(fb_ids))
+    }
+    
+    # TikTok Pixel
+    tiktok_pattern = r"ttq\.load\('([A-Z0-9]+)'\)"
+    tiktok_ids = re.findall(tiktok_pattern, html)
+    trackers_found['tiktok_pixel'] = {
+        'active': len(tiktok_ids) > 0,
+        'ids': list(set(tiktok_ids))
+    }
+    
+    # Snapchat Pixel
+    snap_pattern = r"snaptr\('init',\s*'([a-f0-9-]+)'\)"
+    snap_ids = re.findall(snap_pattern, html)
+    trackers_found['snapchat_pixel'] = {
+        'active': len(snap_ids) > 0,
+        'ids': list(set(snap_ids))
+    }
+    
+    # Twitter Pixel
+    twitter_pattern = r"twitter\.com/i/adsct\?txn_id=([a-z0-9]+)"
+    twitter_ids = re.findall(twitter_pattern, html)
+    trackers_found['twitter_pixel'] = {
+        'active': len(twitter_ids) > 0 or 'static.ads-twitter.com' in html,
+        'ids': list(set(twitter_ids))
+    }
+    
+    # Hotjar
+    hotjar_pattern = r"hotjar\.com/c/hotjar-(\d+)\.js"
+    hotjar_ids = re.findall(hotjar_pattern, html)
+    trackers_found['hotjar'] = {
+        'active': 'hotjar.com' in html,
+        'ids': list(set(hotjar_ids))
+    }
+    
+    # LinkedIn Insight
+    linkedin_pattern = r"_linkedin_partner_id\s*=\s*\"(\d+)\""
+    linkedin_ids = re.findall(linkedin_pattern, html)
+    trackers_found['linkedin_insight'] = {
+        'active': 'snap.licdn.com' in html,
+        'ids': list(set(linkedin_ids))
+    }
+    
+    # Google Ads
+    google_ads_pattern = r"AW-\d+"
+    google_ads_ids = re.findall(google_ads_pattern, html)
+    trackers_found['google_ads'] = {
+        'active': 'googleadservices' in html or len(google_ads_ids) > 0,
+        'ids': list(set(google_ads_ids))
+    }
+    
+    # Build active lists
+    active_trackers = [name for name, data in trackers_found.items() if data['active']]
     
     return {
-        'trackers': active,
-        'active_count': len(active_list),
-        'active_trackers': active_list,
-        'has_analytics': active.get('google_analytics') or active.get('google_tag_manager'),
-        'has_advertising': any([active.get('facebook_pixel'), active.get('google_ads')])
+        'trackers': trackers_found,
+        'active_count': len(active_trackers),
+        'active_trackers': active_trackers,
+        'has_analytics': trackers_found['google_analytics']['active'] or trackers_found['google_tag_manager']['active'],
+        'has_advertising': any([
+            trackers_found['facebook_pixel']['active'],
+            trackers_found['google_ads']['active'],
+            trackers_found['tiktok_pixel']['active']
+        ])
     }
 
 def analyze_seo(soup, html, response):
@@ -190,7 +247,6 @@ def calculate_scores(results):
     technical = results.get('technical', {})
     trackers = results.get('trackers', {})
     
-    # SEO score
     seo_score = 100
     if not seo.get('title') or seo.get('title_length', 0) < 10:
         seo_score -= 20
@@ -199,7 +255,6 @@ def calculate_scores(results):
     if seo.get('images_without_alt', 0) > 10:
         seo_score -= 15
     
-    # Performance score
     perf_score = 100
     response_time = technical.get('response_time_ms', 0)
     if response_time > 3000:
@@ -209,7 +264,6 @@ def calculate_scores(results):
     if technical.get('cdn') == 'none':
         perf_score -= 10
     
-    # Marketing score
     marketing_score = 50
     if trackers.get('has_analytics'):
         marketing_score += 20
@@ -232,7 +286,6 @@ def generate_recommendations(results):
     trackers = results.get('trackers', {})
     platform = results.get('platform', {})
     
-    # SEO recommendations
     if seo.get('images_without_alt', 0) > 0:
         recs.append({
             'category': 'SEO',
@@ -242,7 +295,6 @@ def generate_recommendations(results):
             'impact': 'Better accessibility and image search visibility'
         })
     
-    # Performance recommendations
     if technical.get('response_time_ms', 0) > 3000:
         recs.append({
             'category': 'Performance',
@@ -261,7 +313,6 @@ def generate_recommendations(results):
             'impact': 'Faster loading times for international visitors'
         })
     
-    # Marketing recommendations
     if not trackers.get('has_advertising') and platform.get('is_ecommerce'):
         recs.append({
             'category': 'Marketing',
