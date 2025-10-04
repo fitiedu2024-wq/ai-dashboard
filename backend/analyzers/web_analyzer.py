@@ -323,3 +323,14 @@ def generate_recommendations(results):
         })
     
     return recs
+
+# Import Facebook Ads analyzer
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from facebook_ads_analyzer import get_competitor_ads, analyze_ad_strategy
+except ImportError:
+    def get_competitor_ads(domain, country="AE"):
+        return []
+    def analyze_ad_strategy(ads):
+        return {}
