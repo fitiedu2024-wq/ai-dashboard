@@ -3,10 +3,16 @@ from bs4 import BeautifulSoup
 import re
 from urllib.parse import urlparse
 import json
+import sys
+import os
+
+# Add parent directory to path to import competitor_analyzer
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from competitor_analyzer import find_competitors, analyze_competitor_pages
 
 def analyze_domain(domain: str) -> dict:
     """
-    Comprehensive domain analysis
+    Comprehensive domain analysis with competitors
     """
     # Ensure domain has protocol
     if not domain.startswith(('http://', 'https://')):
@@ -19,306 +25,235 @@ def analyze_domain(domain: str) -> dict:
         'platform': {},
         'trackers': {},
         'seo': {},
-        'recommendations': []
+        'recommendations': [],
+        'scores': {},
+        'competitors': []
     }
     
     try:
-        # Fetch website
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        response = requests.get(domain, headers=headers, timeout=10, allow_redirects=True)
+        # Fetch page
+        response = requests.get(domain, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
         html = response.text
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Technical Analysis
-        results['technical'] = analyze_technical(response, soup)
+        # Technical analysis
+        results['technical'] = analyze_technical(response)
         
-        # Platform Detection
-        results['platform'] = detect_platform(html, response.headers)
+        # Platform detection
+        results['platform'] = detect_platform(html, soup)
         
-        # Tracker Scanning
-        results['trackers'] = scan_trackers(html, soup)
+        # Tracker detection
+        results['trackers'] = detect_trackers(html)
         
-        # SEO Analysis
-        results['seo'] = analyze_seo(soup, response)
+        # SEO analysis
+        results['seo'] = analyze_seo(soup, html, response)
         
-        # Generate Recommendations
-        results['recommendations'] = generate_recommendations(results)
-        
-        # Calculate scores
+        # Generate scores
         results['scores'] = calculate_scores(results)
         
+        # Generate recommendations
+        results['recommendations'] = generate_recommendations(results)
+        
+        # NEW: Competitor analysis
+        try:
+            page_info = {
+                'title': results['seo'].get('title', ''),
+                'meta': {'description': results['seo'].get('meta_description', '')}
+            }
+            
+            competitors = find_competitors(
+                domain.replace('https://', '').replace('http://', '').split('/')[0],
+                page_info,
+                max_results=4
+            )
+            
+            # Analyze each competitor
+            for comp in competitors:
+                detailed_comp = analyze_competitor_pages(comp)
+                results['competitors'].append(detailed_comp)
+                
+        except Exception as comp_err:
+            print(f"Competitor analysis error: {comp_err}")
+            results['competitors'] = []
+        
     except Exception as e:
+        print(f"Analysis error: {e}")
         results['status'] = 'failed'
         results['error'] = str(e)
     
     return results
 
-
-def analyze_technical(response, soup):
-    """Analyze technical infrastructure"""
-    tech = {
+def analyze_technical(response):
+    return {
         'status_code': response.status_code,
         'response_time_ms': int(response.elapsed.total_seconds() * 1000),
-        'ssl_enabled': response.url.startswith('https://'),
+        'ssl_enabled': response.url.startswith('https'),
         'redirects': len(response.history),
-        'server': response.headers.get('Server', 'Unknown'),
+        'server': response.headers.get('Server', 'unknown'),
         'cdn': detect_cdn(response.headers),
-        'compression': 'gzip' in response.headers.get('Content-Encoding', ''),
+        'compression': 'Content-Encoding' in response.headers
     }
-    return tech
-
-
-def detect_platform(html, headers):
-    """Detect CMS/platform"""
-    platforms = {
-        'wordpress': False,
-        'shopify': False,
-        'woocommerce': False,
-        'wix': False,
-        'squarespace': False,
-        'salla': False,
-        'zid': False,
-        'magento': False,
-        'custom': False
-    }
-    
-    html_lower = html.lower()
-    
-    # WordPress
-    if 'wp-content' in html_lower or 'wordpress' in html_lower:
-        platforms['wordpress'] = True
-        if 'woocommerce' in html_lower:
-            platforms['woocommerce'] = True
-    
-    # Shopify
-    if 'shopify' in html_lower or 'cdn.shopify.com' in html_lower:
-        platforms['shopify'] = True
-    
-    # Salla
-    if 'salla.sa' in html_lower or 'salla.network' in html_lower:
-        platforms['salla'] = True
-    
-    # Zid
-    if 'zid.sa' in html_lower or 'zid.store' in html_lower:
-        platforms['zid'] = True
-    
-    # Wix
-    if 'wix.com' in html_lower or 'wixstatic.com' in html_lower:
-        platforms['wix'] = True
-    
-    # Squarespace
-    if 'squarespace' in html_lower:
-        platforms['squarespace'] = True
-    
-    # Magento
-    if 'magento' in html_lower or 'mage' in html_lower:
-        platforms['magento'] = True
-    
-    detected = [k for k, v in platforms.items() if v]
-    
-    return {
-        'detected_platforms': detected,
-        'primary_platform': detected[0] if detected else 'custom',
-        'is_ecommerce': any(p in detected for p in ['shopify', 'woocommerce', 'salla', 'zid', 'magento'])
-    }
-
 
 def detect_cdn(headers):
-    """Detect CDN provider"""
     cdn_headers = {
-        'cloudflare': ['cf-ray', 'cf-cache-status'],
-        'cloudfront': ['x-amz-cf-id'],
-        'fastly': ['fastly-'],
-        'akamai': ['akamai-'],
+        'cloudflare': 'cf-ray',
+        'fastly': 'fastly-',
+        'akamai': 'akamai',
+        'cloudfront': 'cloudfront'
     }
     
-    for cdn, header_keys in cdn_headers.items():
-        for key in header_keys:
-            if any(key in h.lower() for h in headers.keys()):
-                return cdn
+    for cdn, header in cdn_headers.items():
+        if any(header in k.lower() for k in headers.keys()):
+            return cdn
     return 'none'
 
-
-def scan_trackers(html, soup):
-    """Scan for marketing trackers and pixels"""
-    trackers = {
-        'google_analytics': False,
-        'google_tag_manager': False,
-        'facebook_pixel': False,
-        'tiktok_pixel': False,
-        'snapchat_pixel': False,
-        'twitter_pixel': False,
-        'hotjar': False,
-        'linkedin_insight': False,
-        'google_ads': False,
+def detect_platform(html, soup):
+    html_lower = html.lower()
+    platforms = []
+    
+    signatures = {
+        'wordpress': ['wp-content', 'wp-includes'],
+        'shopify': ['shopify', 'cdn.shopify.com'],
+        'woocommerce': ['woocommerce'],
+        'magento': ['magento'],
+        'wix': ['wix.com'],
+        'squarespace': ['squarespace']
     }
     
-    html_lower = html.lower()
+    for platform, sigs in signatures.items():
+        if any(sig in html_lower for sig in sigs):
+            platforms.append(platform)
     
-    # Google Analytics
-    if 'google-analytics.com/analytics.js' in html_lower or 'googletagmanager.com/gtag/js' in html_lower or 'ga(' in html_lower:
-        trackers['google_analytics'] = True
-    
-    # Google Tag Manager
-    if 'googletagmanager.com/gtm.js' in html_lower or 'gtm.start' in html_lower:
-        trackers['google_tag_manager'] = True
-    
-    # Facebook Pixel
-    if 'connect.facebook.net' in html_lower or 'fbq(' in html_lower:
-        trackers['facebook_pixel'] = True
-    
-    # TikTok Pixel
-    if 'tiktok.com/i18n/pixel' in html_lower or 'ttq.' in html_lower:
-        trackers['tiktok_pixel'] = True
-    
-    # Snapchat Pixel
-    if 'sc-static.net' in html_lower or 'snaptr(' in html_lower:
-        trackers['snapchat_pixel'] = True
-    
-    # Twitter Pixel
-    if 'static.ads-twitter.com' in html_lower or 'twq(' in html_lower:
-        trackers['twitter_pixel'] = True
-    
-    # Hotjar
-    if 'hotjar.com' in html_lower or 'hj(' in html_lower:
-        trackers['hotjar'] = True
-    
-    # LinkedIn Insight
-    if 'snap.licdn.com' in html_lower or 'linkedin.com/px' in html_lower:
-        trackers['linkedin_insight'] = True
-    
-    # Google Ads
-    if 'googleadservices.com' in html_lower or 'googlesyndication.com' in html_lower:
-        trackers['google_ads'] = True
-    
-    active_trackers = [k for k, v in trackers.items() if v]
+    is_ecommerce = any(kw in html_lower for kw in ['cart', 'checkout', 'add to cart', 'product'])
     
     return {
-        'trackers': trackers,
-        'active_count': len(active_trackers),
-        'active_trackers': active_trackers,
-        'has_analytics': trackers['google_analytics'] or trackers['google_tag_manager'],
-        'has_advertising': any([trackers['facebook_pixel'], trackers['google_ads'], trackers['tiktok_pixel']])
+        'detected_platforms': platforms,
+        'primary_platform': platforms[0] if platforms else 'unknown',
+        'is_ecommerce': is_ecommerce
     }
 
-
-def analyze_seo(soup, response):
-    """Analyze SEO elements"""
-    seo = {
-        'title': None,
-        'title_length': 0,
-        'meta_description': None,
-        'meta_description_length': 0,
-        'h1_count': 0,
-        'image_count': 0,
-        'images_without_alt': 0,
-        'has_robots_meta': False,
-        'has_canonical': False,
-        'has_og_tags': False,
-        'page_size_kb': len(response.content) / 1024,
+def detect_trackers(html):
+    html_lower = html.lower()
+    
+    tracker_map = {
+        'google_analytics': ['google-analytics', 'gtag'],
+        'google_tag_manager': ['googletagmanager'],
+        'facebook_pixel': ['facebook.net/tr', 'fbq'],
+        'tiktok_pixel': ['tiktok.com/i18n/pixel'],
+        'snapchat_pixel': ['snapchat.com/pixel'],
+        'twitter_pixel': ['static.ads-twitter.com'],
+        'hotjar': ['hotjar.com'],
+        'linkedin_insight': ['snap.licdn.com'],
+        'google_ads': ['googleadservices']
     }
     
-    # Title
-    title_tag = soup.find('title')
-    if title_tag:
-        seo['title'] = title_tag.get_text().strip()
-        seo['title_length'] = len(seo['title'])
+    active = {}
+    active_list = []
     
-    # Meta Description
+    for tracker, sigs in tracker_map.items():
+        found = any(sig in html_lower for sig in sigs)
+        active[tracker] = found
+        if found:
+            active_list.append(tracker)
+    
+    return {
+        'trackers': active,
+        'active_count': len(active_list),
+        'active_trackers': active_list,
+        'has_analytics': active.get('google_analytics') or active.get('google_tag_manager'),
+        'has_advertising': any([active.get('facebook_pixel'), active.get('google_ads')])
+    }
+
+def analyze_seo(soup, html, response):
+    title = soup.find('title')
     meta_desc = soup.find('meta', attrs={'name': 'description'})
-    if meta_desc and meta_desc.get('content'):
-        seo['meta_description'] = meta_desc['content']
-        seo['meta_description_length'] = len(seo['meta_description'])
     
-    # H1 tags
-    seo['h1_count'] = len(soup.find_all('h1'))
-    
-    # Images
     images = soup.find_all('img')
-    seo['image_count'] = len(images)
-    seo['images_without_alt'] = len([img for img in images if not img.get('alt')])
+    images_without_alt = [img for img in images if not img.get('alt')]
     
-    # Robots meta
-    seo['has_robots_meta'] = bool(soup.find('meta', attrs={'name': 'robots'}))
-    
-    # Canonical
-    seo['has_canonical'] = bool(soup.find('link', attrs={'rel': 'canonical'}))
-    
-    # Open Graph
-    seo['has_og_tags'] = bool(soup.find('meta', attrs={'property': re.compile('^og:')}))
-    
-    return seo
+    return {
+        'title': title.text.strip() if title else None,
+        'title_length': len(title.text.strip()) if title else 0,
+        'meta_description': meta_desc.get('content') if meta_desc else None,
+        'meta_description_length': len(meta_desc.get('content')) if meta_desc else 0,
+        'h1_count': len(soup.find_all('h1')),
+        'image_count': len(images),
+        'images_without_alt': len(images_without_alt),
+        'has_robots_meta': soup.find('meta', attrs={'name': 'robots'}) is not None,
+        'has_canonical': soup.find('link', attrs={'rel': 'canonical'}) is not None,
+        'has_og_tags': soup.find('meta', property=re.compile('og:')) is not None,
+        'page_size_kb': len(response.content) / 1024
+    }
 
+def calculate_scores(results):
+    seo = results.get('seo', {})
+    technical = results.get('technical', {})
+    trackers = results.get('trackers', {})
+    
+    # SEO score
+    seo_score = 100
+    if not seo.get('title') or seo.get('title_length', 0) < 10:
+        seo_score -= 20
+    if not seo.get('meta_description') or seo.get('meta_description_length', 0) < 50:
+        seo_score -= 15
+    if seo.get('images_without_alt', 0) > 10:
+        seo_score -= 15
+    
+    # Performance score
+    perf_score = 100
+    response_time = technical.get('response_time_ms', 0)
+    if response_time > 3000:
+        perf_score -= 40
+    elif response_time > 1500:
+        perf_score -= 20
+    if technical.get('cdn') == 'none':
+        perf_score -= 10
+    
+    # Marketing score
+    marketing_score = 50
+    if trackers.get('has_analytics'):
+        marketing_score += 20
+    if trackers.get('has_advertising'):
+        marketing_score += 30
+    
+    overall = int((seo_score + perf_score + marketing_score) / 3)
+    
+    return {
+        'seo_score': max(seo_score, 0),
+        'performance_score': max(perf_score, 0),
+        'marketing_score': max(marketing_score, 0),
+        'overall_score': max(overall, 0)
+    }
 
 def generate_recommendations(results):
-    """Generate AI-powered recommendations"""
-    recommendations = []
-    
+    recs = []
     seo = results.get('seo', {})
     technical = results.get('technical', {})
     trackers = results.get('trackers', {})
     platform = results.get('platform', {})
     
-    # SEO Recommendations
-    if not seo.get('title') or seo.get('title_length', 0) < 30:
-        recommendations.append({
-            'category': 'SEO',
-            'priority': 'high',
-            'issue': 'Missing or short page title',
-            'recommendation': 'Add a descriptive title tag (50-60 characters) that includes your main keywords.',
-            'impact': 'Improved search engine visibility and click-through rates'
-        })
-    
-    if not seo.get('meta_description') or seo.get('meta_description_length', 0) < 100:
-        recommendations.append({
-            'category': 'SEO',
-            'priority': 'high',
-            'issue': 'Missing or short meta description',
-            'recommendation': 'Write a compelling meta description (150-160 characters) to improve click-through rates from search results.',
-            'impact': 'Better search result presentation and user engagement'
-        })
-    
-    if seo.get('h1_count', 0) == 0:
-        recommendations.append({
-            'category': 'SEO',
-            'priority': 'medium',
-            'issue': 'No H1 heading found',
-            'recommendation': 'Add a clear H1 heading that describes your page content.',
-            'impact': 'Improved content structure and SEO'
-        })
-    
+    # SEO recommendations
     if seo.get('images_without_alt', 0) > 0:
-        recommendations.append({
+        recs.append({
             'category': 'SEO',
             'priority': 'medium',
-            'issue': f'{seo["images_without_alt"]} images missing alt text',
+            'issue': f"{seo['images_without_alt']} images missing alt text",
             'recommendation': 'Add descriptive alt text to all images for accessibility and SEO.',
             'impact': 'Better accessibility and image search visibility'
         })
     
-    # Performance Recommendations
+    # Performance recommendations
     if technical.get('response_time_ms', 0) > 3000:
-        recommendations.append({
+        recs.append({
             'category': 'Performance',
             'priority': 'high',
-            'issue': f'Slow page load time ({technical["response_time_ms"]}ms)',
+            'issue': f"Slow page load time ({technical['response_time_ms']}ms)",
             'recommendation': 'Optimize images, enable caching, and consider using a CDN to improve load times.',
             'impact': 'Better user experience and SEO rankings'
         })
     
-    if not technical.get('ssl_enabled'):
-        recommendations.append({
-            'category': 'Security',
-            'priority': 'critical',
-            'issue': 'Website not using HTTPS',
-            'recommendation': 'Install an SSL certificate immediately to secure your website.',
-            'impact': 'User trust, data security, and SEO improvement'
-        })
-    
     if technical.get('cdn') == 'none':
-        recommendations.append({
+        recs.append({
             'category': 'Performance',
             'priority': 'medium',
             'issue': 'No CDN detected',
@@ -326,18 +261,9 @@ def generate_recommendations(results):
             'impact': 'Faster loading times for international visitors'
         })
     
-    # Marketing Recommendations
-    if not trackers.get('has_analytics'):
-        recommendations.append({
-            'category': 'Marketing',
-            'priority': 'high',
-            'issue': 'No analytics tracking detected',
-            'recommendation': 'Install Google Analytics or Google Tag Manager to track visitor behavior and conversions.',
-            'impact': 'Data-driven decision making and campaign optimization'
-        })
-    
+    # Marketing recommendations
     if not trackers.get('has_advertising') and platform.get('is_ecommerce'):
-        recommendations.append({
+        recs.append({
             'category': 'Marketing',
             'priority': 'high',
             'issue': 'No advertising pixels detected on e-commerce site',
@@ -345,71 +271,4 @@ def generate_recommendations(results):
             'impact': 'Better ad targeting and conversion tracking'
         })
     
-    return recommendations
-
-
-def calculate_scores(results):
-    """Calculate performance scores"""
-    scores = {
-        'seo_score': 0,
-        'performance_score': 0,
-        'marketing_score': 0,
-        'overall_score': 0
-    }
-    
-    seo = results.get('seo', {})
-    technical = results.get('technical', {})
-    trackers = results.get('trackers', {})
-    
-    # SEO Score (0-100)
-    seo_points = 0
-    if seo.get('title') and 30 <= seo.get('title_length', 0) <= 70:
-        seo_points += 20
-    if seo.get('meta_description') and 120 <= seo.get('meta_description_length', 0) <= 160:
-        seo_points += 20
-    if seo.get('h1_count', 0) >= 1:
-        seo_points += 15
-    if seo.get('has_canonical'):
-        seo_points += 10
-    if seo.get('has_og_tags'):
-        seo_points += 10
-    if seo.get('images_without_alt', 1) == 0:
-        seo_points += 15
-    if seo.get('has_robots_meta'):
-        seo_points += 10
-    scores['seo_score'] = min(seo_points, 100)
-    
-    # Performance Score (0-100)
-    perf_points = 0
-    response_time = technical.get('response_time_ms', 5000)
-    if response_time < 1000:
-        perf_points += 40
-    elif response_time < 2000:
-        perf_points += 30
-    elif response_time < 3000:
-        perf_points += 20
-    else:
-        perf_points += 10
-    
-    if technical.get('ssl_enabled'):
-        perf_points += 25
-    if technical.get('compression'):
-        perf_points += 15
-    if technical.get('cdn') != 'none':
-        perf_points += 20
-    scores['performance_score'] = min(perf_points, 100)
-    
-    # Marketing Score (0-100)
-    marketing_points = 0
-    if trackers.get('has_analytics'):
-        marketing_points += 30
-    if trackers.get('has_advertising'):
-        marketing_points += 30
-    active_count = trackers.get('active_count', 0)
-    marketing_points += min(active_count * 10, 40)
-    scores['marketing_score'] = min(marketing_points, 100)
-    
-    # Overall Score
-    scores['overall_score'] = int((scores['seo_score'] + scores['performance_score'] + scores['marketing_score']) / 3)
-    
-    return scores
+    return recs
