@@ -340,6 +340,49 @@ export default function Dashboard() {
                                       {comp.domain}
                                     </a>
                                     <p className="text-purple-200 text-sm mt-1">{comp.title}</p>
+                                    
+                                    {/* Social Media Links */}
+                                    {comp.social && Object.keys(comp.social).filter(k => comp.social[k]).length > 0 && (
+                                      <div className="flex gap-2 mt-2 flex-wrap">
+                                        {comp.social.facebook && (
+                                          <a href={comp.social.facebook} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-blue-600/30 text-blue-300 rounded hover:bg-blue-600/50">
+                                            Facebook
+                                          </a>
+                                        )}
+                                        {comp.social.instagram && (
+                                          <a href={comp.social.instagram} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-pink-600/30 text-pink-300 rounded hover:bg-pink-600/50">
+                                            Instagram
+                                          </a>
+                                        )}
+                                        {comp.social.twitter && (
+                                          <a href={comp.social.twitter} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-sky-600/30 text-sky-300 rounded hover:bg-sky-600/50">
+                                            Twitter
+                                          </a>
+                                        )}
+                                        {comp.social.linkedin && (
+                                          <a href={comp.social.linkedin} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-blue-700/30 text-blue-300 rounded hover:bg-blue-700/50">
+                                            LinkedIn
+                                          </a>
+                                        )}
+                                        {comp.social.youtube && (
+                                          <a href={comp.social.youtube} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-red-600/30 text-red-300 rounded hover:bg-red-600/50">
+                                            YouTube
+                                          </a>
+                                        )}
+                                        {comp.social.tiktok && (
+                                          <a href={comp.social.tiktok} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-slate-700/30 text-slate-300 rounded hover:bg-slate-700/50">
+                                            TikTok
+                                          </a>
+                                        )}
+                                      </div>
+                                    )}
+                                    
+                                    {/* Facebook Ads Library Link */}
+                                    {comp.facebook_ads_url && (
+                                      <a href={comp.facebook_ads_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition">
+                                        📢 View Facebook Ads
+                                      </a>
+                                    )}
                                   </div>
                                   {comp.relevance_score && (
                                     <span className="px-3 py-1 bg-purple-600 text-white rounded-full text-xs font-bold ml-4">
