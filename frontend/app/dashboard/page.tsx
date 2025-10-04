@@ -374,14 +374,33 @@ export default function Dashboard() {
                                             TikTok
                                           </a>
                                         )}
+                                        {comp.social.snapchat && (
+                                          <a href={comp.social.snapchat} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 bg-yellow-500/30 text-yellow-300 rounded hover:bg-yellow-500/50">
+                                            Snapchat
+                                          </a>
+                                        )}
                                       </div>
                                     )}
                                     
-                                    {/* Facebook Ads Library Link */}
-                                    {comp.facebook_ads_url && (
-                                      <a href={comp.facebook_ads_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition">
-                                        📢 View Facebook Ads
-                                      </a>
+                                    {/* Ads Library Links */}
+                                    {comp.ads_library_urls && Object.keys(comp.ads_library_urls).length > 0 && (
+                                      <div className="flex gap-2 mt-2 flex-wrap">
+                                        {comp.ads_library_urls.facebook && (
+                                          <a href={comp.ads_library_urls.facebook} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition">
+                                            📢 Facebook Ads
+                                          </a>
+                                        )}
+                                        {comp.ads_library_urls.snapchat && (
+                                          <a href={comp.ads_library_urls.snapchat} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 transition">
+                                            👻 Snapchat Ads
+                                          </a>
+                                        )}
+                                        {comp.ads_library_urls.tiktok && (
+                                          <a href={comp.ads_library_urls.tiktok} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-slate-800 text-white rounded-full hover:bg-slate-900 transition">
+                                            🎵 TikTok Ads
+                                          </a>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
                                   {comp.relevance_score && (

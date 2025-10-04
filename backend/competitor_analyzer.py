@@ -138,14 +138,14 @@ def analyze_competitor_pages(competitor: Dict) -> Dict:
             social_links = data.get('social', {})
             
             # Import social analyzer
-            from social_media_analyzer import generate_ads_library_url, analyze_social_presence
+            from social_media_analyzer import generate_ads_library_urls, analyze_social_presence
             
             return {
                 **competitor, 
                 'pages': data.get('pages', []),
                 'social': social_links,
                 'social_analysis': analyze_social_presence(social_links),
-                'facebook_ads_url': generate_ads_library_url(social_links)
+                'ads_library_urls': generate_ads_library_urls(social_links)
             }
     except Exception as e:
         print(f"Competitor scraping error: {e}")
@@ -156,4 +156,4 @@ def extract_domain(url: str) -> str:
     parsed = urlparse(url)
     return parsed.netloc.replace('www.', '')
 
-from social_media_analyzer import generate_ads_library_url, analyze_social_presence
+from social_media_analyzer import generate_ads_library_urls, analyze_social_presence
