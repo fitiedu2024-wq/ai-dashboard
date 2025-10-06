@@ -1,12 +1,25 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-psycopg2-binary
-python-jose[cryptography]
-passlib[bcrypt]
-python-multipart
-google-generativeai
-beautifulsoup4
-lxml
-requests
-python-dotenv
+# Core Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.1.1
+
+# Database
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.9
+
+# HTTP & Scraping
+requests==2.32.3
+httpx==0.28.1
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# Google AI (simplified - only what we need)
+google-generativeai==1.41.0
+
+# Remove heavy packages we don't really use
+# google-cloud-vision (not needed)
+# google-cloud-language (not needed)
+# google-cloud-tasks (not needed)
