@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
+import os
 
 Base = declarative_base()
 
@@ -15,7 +16,6 @@ class User(Base):
     quota = Column(Integer, default=15)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    last_login = Column(DateTime, nullable=True)
 
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
@@ -23,21 +23,23 @@ class ActivityLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     action = Column(String)
-    ip_address = Column(String, nullable=True)
-    user_agent = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    details = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class AnalysisJob(Base):
     __tablename__ = "analysis_jobs"
     
     id = Column(Integer, primary_key=True, index=True)
+    domain = Column(String)
     user_id = Column(Integer, ForeignKey("users.id"))
-    domain = Column(String, index=True)
-    status = Column(String, default="pending")  # pending, processing, completed, failed
-    results = Column(Text, nullable=True)  # JSON string
-    error_message = Column(Text, nullable=True)
+    status = Column(String, default="pending")
+    result = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
 
-# Export engine for job_queue
+# Database setup
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./grinners.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 engine = create_engine(DATABASE_URL)
+Base.metadata.create_all(bind=engine)
