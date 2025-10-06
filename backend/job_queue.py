@@ -1,6 +1,5 @@
 """
 Simple background job system using threading
-Not enterprise-grade, but works for MVP
 """
 
 import threading
@@ -9,23 +8,8 @@ import time
 from typing import Callable, Dict, Any
 import json
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Text
-from models import Base, engine
-
-class AnalysisJob(Base):
-    __tablename__ = "analysis_jobs"
-    
-    id = Column(Integer, primary_key=True)
-    job_id = Column(String, unique=True, index=True)
-    status = Column(String)  # pending, running, completed, failed
-    domain = Column(String)
-    analysis_type = Column(String)
-    result = Column(Text, nullable=True)
-    error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
-
-Base.metadata.create_all(bind=engine)
+from sqlalchemy.orm import sessionmaker
+from models import Base, engine, AnalysisJob  # Import from models
 
 class JobQueue:
     def __init__(self):
@@ -52,7 +36,6 @@ class JobQueue:
     
     def _execute_job(self, job: Dict):
         """Execute a job"""
-        from sqlalchemy.orm import sessionmaker
         Session = sessionmaker(bind=engine)
         db = Session()
         
@@ -87,7 +70,6 @@ class JobQueue:
     
     def enqueue(self, job_id: str, analysis_type: str, func: Callable, *args, **kwargs) -> str:
         """Add job to queue"""
-        from sqlalchemy.orm import sessionmaker
         Session = sessionmaker(bind=engine)
         db = Session()
         
@@ -113,7 +95,6 @@ class JobQueue:
     
     def get_status(self, job_id: str) -> Dict:
         """Get job status"""
-        from sqlalchemy.orm import sessionmaker
         Session = sessionmaker(bind=engine)
         db = Session()
         

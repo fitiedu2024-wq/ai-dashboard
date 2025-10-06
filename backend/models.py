@@ -30,11 +30,15 @@ class AnalysisJob(Base):
     __tablename__ = "analysis_jobs"
     
     id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(String, unique=True, index=True)
     domain = Column(String)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    analysis_type = Column(String)
     status = Column(String, default="pending")
     result = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
 
 # Database setup
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./grinners.db")
