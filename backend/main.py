@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker, Session
-from passlib.context import CryptContext
 from credentials import DEFAULT_ADMIN, get_password_hash, verify_password
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
@@ -38,7 +37,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Using credentials.py for password hashing
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
 def get_db():
@@ -331,7 +330,6 @@ def get_activity_logs(
     return result
 
 # Startup event
-@app.on_event("startup")
 async def startup_event():
     db = SessionLocal()
     try:
@@ -628,7 +626,6 @@ async def deep_analysis_endpoint(
         raise HTTPException(500, str(e))
 
 # Override default admin on startup
-@app.on_event("startup")
 async def update_admin_credentials():
     """Update admin user with credentials from credentials.py"""
     try:
