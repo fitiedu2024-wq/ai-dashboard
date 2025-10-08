@@ -4,6 +4,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
+from credentials import DEFAULT_ADMIN, get_password_hash, verify_password
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
@@ -48,10 +49,10 @@ def get_db():
         db.close()
 
 def hash_password(password: str):
-    return pwd_context.hash(password)
+    return get_password_hash(password)
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    return verify_password(plain_password, hashed_password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
