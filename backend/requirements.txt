@@ -17,7 +17,7 @@ beautifulsoup4==4.12.3
 lxml==5.3.0
 
 # Google AI (simplified - only what we need)
-google-generativeai==1.41.0
+google-generativeai==0.8.5
 
 # Remove heavy packages we don't really use
 # google-cloud-vision (not needed)
