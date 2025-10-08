@@ -626,3 +626,33 @@ async def deep_analysis_endpoint(
         
     except Exception as e:
         raise HTTPException(500, str(e))
+
+# Override default admin on startup
+@app.on_event("startup")
+async def update_admin_credentials():
+    """Update admin user with credentials from credentials.py"""
+    try:
+        db = SessionLocal()
+        admin = db.query(User).filter(User.email == "admin@grinners.com").first()
+        
+        # Update to new credentials
+        if admin:
+            admin.email = DEFAULT_ADMIN["email"]
+            admin.hashed_password = get_password_hash(DEFAULT_ADMIN["password"])
+            admin.name = DEFAULT_ADMIN["name"]
+            db.commit()
+            print(f"✅ Admin updated: {DEFAULT_ADMIN['email']}")
+        else:
+            # Create new admin
+            new_admin = User(
+                email=DEFAULT_ADMIN["email"],
+                hashed_password=get_password_hash(DEFAULT_ADMIN["password"]),
+                name=DEFAULT_ADMIN["name"]
+            )
+            db.add(new_admin)
+            db.commit()
+            print(f"✅ Admin created: {DEFAULT_ADMIN['email']}")
+        
+        db.close()
+    except Exception as e:
+        print(f"❌ Admin update error: {e}")
