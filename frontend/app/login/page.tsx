@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, Loader2, Sparkles } from 'lucide-react';
+import { Mail, Lock, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 
 export default function Login() {
   const router = useRouter();
@@ -42,40 +43,48 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
       {/* Animated background */}
       <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-gray-900 to-pink-900">
-        <div className="absolute inset-0 opacity-30">
-          {[...Array(50)].map((_, i) => (
+        {/* Floating particles */}
+        <div className="absolute inset-0">
+          {[...Array(100)].map((_, i) => (
             <div
               key={i}
-              className="absolute rounded-full bg-white"
+              className="absolute rounded-full"
               style={{
-                width: Math.random() * 3 + 1 + 'px',
-                height: Math.random() * 3 + 1 + 'px',
+                width: Math.random() * 4 + 1 + 'px',
+                height: Math.random() * 4 + 1 + 'px',
                 top: Math.random() * 100 + '%',
                 left: Math.random() * 100 + '%',
-                animation: `float ${Math.random() * 10 + 10}s infinite ease-in-out`
+                background: `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.1})`,
+                animation: `float ${Math.random() * 10 + 5}s infinite ease-in-out`,
+                animationDelay: `${Math.random() * 5}s`
               }}
             />
           ))}
         </div>
+
+        {/* Gradient orbs */}
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
       </div>
 
       {/* Login card */}
       <div className="relative z-10 w-full max-w-md">
-        <div className="glass rounded-3xl p-8 border border-white/20 backdrop-blur-xl">
+        <div className="glass rounded-3xl p-8 border border-white/20 backdrop-blur-xl shadow-2xl">
           {/* Logo */}
           <div className="flex justify-center mb-8">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-4xl font-bold shadow-2xl animate-pulse">
-                G
-              </div>
-              <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-yellow-400 animate-spin" style={{animationDuration: '3s'}} />
+            <div className="relative animate-float">
+              <img 
+                src="https://image2url.com/images/1759984925499-cddfdfef-f863-48f3-8049-17d9ec29e066.png"
+                alt="AI Grinners Logo"
+                className="w-32 h-32 object-contain drop-shadow-2xl"
+              />
             </div>
           </div>
 
-          <h1 className="text-4xl font-bold text-center mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold text-center mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent animate-gradient">
             Welcome Back
           </h1>
-          <p className="text-center text-gray-300 mb-8">Sign in to AI Grinners Platform</p>
+          <p className="text-center text-gray-300 mb-8">AI Grinners Marketing Intelligence</p>
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
@@ -132,8 +141,19 @@ export default function Login() {
 
       <style jsx>{`
         @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-20px); }
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        @keyframes gradient {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+        .animate-gradient {
+          background-size: 200% auto;
+          animation: gradient 3s linear infinite;
         }
       `}</style>
     </div>

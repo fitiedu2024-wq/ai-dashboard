@@ -1,8 +1,16 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, create_engine
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 from datetime import datetime
 import os
 
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 class User(Base):
@@ -15,45 +23,30 @@ class User(Base):
     role = Column(String, default="user")
     quota = Column(Integer, default=15)
     is_active = Column(Boolean, default=True)
+    last_login = Column(DateTime, nullable=True)
+    last_ip = Column(String, nullable=True)
+    last_geo = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer)
+    user_email = Column(String)
     action = Column(String)
     details = Column(Text, nullable=True)
+    ip_address = Column(String, nullable=True)
+    geo_location = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-class AnalysisJob(Base):
-    __tablename__ = "analysis_jobs"
+class AnalysisReport(Base):
+    __tablename__ = "analysis_reports"
     
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(String, unique=True, index=True)
+    user_id = Column(Integer)
+    report_type = Column(String)  # deep_analysis, seo_compare, etc.
     domain = Column(String)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    analysis_type = Column(String)
-    status = Column(String, default="pending")
-    result = Column(Text, nullable=True)
-    error = Column(Text, nullable=True)
+    competitors = Column(Text, nullable=True)
+    results = Column(Text)  # JSON string
     created_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
-
-# Database setup
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./grinners.db")
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-engine = create_engine(DATABASE_URL)
-Base.metadata.create_all(bind=engine)
-
-# Create SessionLocal
-from sqlalchemy.orm import sessionmaker
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create SessionLocal
-from sqlalchemy.orm import sessionmaker
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
