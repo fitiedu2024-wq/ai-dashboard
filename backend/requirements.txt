@@ -30,3 +30,6 @@ sendgrid==6.11.0
 apscheduler==3.10.4
 pandas==2.2.3
 plotly==5.24.1
+beautifulsoup4==4.12.3
+requests==2.32.3
+lxml==5.3.0
