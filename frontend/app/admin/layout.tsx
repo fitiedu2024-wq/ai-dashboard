@@ -1,87 +1,97 @@
-'use client'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai-dashboard-backend-7dha.onrender.com'
+'use client';
+import { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { Settings, Users, Activity, ArrowLeft, LogOut } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [loading, setLoading] = useState(true)
-  const router = useRouter()
+  const router = useRouter();
+  const pathname = usePathname();
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      router.push('/login')
-      return
-    }
+    checkAuth();
+  }, []);
 
-    fetch(`${API_URL}/api/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(user => {
-        if (user.role !== 'admin') {
-          router.push('/dashboard')
-        } else {
-          setLoading(false)
-        }
-      })
-      .catch(() => router.push('/login'))
-  }, [router])
+  const checkAuth = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    try {
+      const response = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/user', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        router.push('/login');
+        return;
+      }
+      const user = await response.json();
+      if (!user.is_admin) {
+        alert('Admin access required');
+        router.push('/dashboard');
+        return;
+      }
+      setIsAdmin(true);
+      setLoading(false);
+    } catch (error) {
+      console.error('Auth error:', error);
+      router.push('/login');
+    }
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="text-xl text-white">Checking admin access...</div>
+        </div>
       </div>
-    )
+    );
   }
 
+  if (!isAdmin) return null;
+
+  const adminLinks = [
+    { href: '/admin', label: 'Dashboard', icon: Settings },
+    { href: '/admin/users', label: 'Users', icon: Users },
+    { href: '/admin/activity', label: 'Activity', icon: Activity },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold">AI Grinners - Admin Panel</h1>
-              <p className="text-purple-100 text-sm">System Management</p>
-            </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem('token')
-                router.push('/login')
-              }}
-              className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition"
-            >
-              Logout
-            </button>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-850 to-gray-900 text-white flex">
+      <div className="w-80 p-6 border-r border-gray-800">
+        <Link href="/dashboard" className="flex items-center gap-2 text-gray-400 hover:text-white mb-8 transition-colors">
+          <ArrowLeft className="w-5 h-5" />
+          <span>Back to Dashboard</span>
+        </Link>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text text-transparent">Admin Panel</h1>
+          <p className="text-gray-400 text-sm mt-2">Manage platform settings</p>
         </div>
-      </header>
-
-      <nav className="bg-white border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex space-x-8">
-            <Link href="/admin" className="px-4 py-3 border-b-2 border-purple-600 font-medium text-purple-600">
-              Dashboard
-            </Link>
-            <Link href="/admin/users" className="px-4 py-3 border-b-2 border-transparent hover:border-purple-300 font-medium text-gray-600 hover:text-purple-600">
-              Users
-            </Link>
-            <Link href="/admin/activity" className="px-4 py-3 border-b-2 border-transparent hover:border-purple-300 font-medium text-gray-600 hover:text-purple-600">
-              Activity Logs
-            </Link>
-            <Link href="/dashboard" className="px-4 py-3 border-b-2 border-transparent hover:border-purple-300 font-medium text-gray-600 hover:text-purple-600">
-              User View
-            </Link>
-          </div>
+        <nav className="space-y-2">
+          {adminLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = pathname === link.href;
+            return (
+              <Link key={link.href} href={link.href} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg' : 'text-gray-300 hover:bg-gray-800/50'}`}>
+                <Icon className="w-5 h-5" />
+                <span className="font-medium">{link.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="mt-auto pt-8">
+          <button onClick={() => { localStorage.removeItem('token'); router.push('/login'); }} className="w-full px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all flex items-center justify-center gap-2">
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
         </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {children}
-      </main>
+      </div>
+      <div className="flex-1 overflow-auto">{children}</div>
     </div>
-  )
+  );
 }
