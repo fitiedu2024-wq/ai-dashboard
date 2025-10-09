@@ -77,7 +77,7 @@ def get_db():
 def hash_password(password: str):
     return get_password_hash(password)
 
-def verify_password(plain_password, hashed_password):
+
     return verify_password(plain_password, hashed_password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
