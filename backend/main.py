@@ -32,8 +32,7 @@ async def startup_event():
     # Create admin
     admin_user = User(
         email=DEFAULT_ADMIN["email"],
-        hashed_password=get_password_hash(DEFAULT_ADMIN["password"]),
-        name=DEFAULT_ADMIN["name"]
+        hashed_password=get_password_hash(DEFAULT_ADMIN["password"])
     )
     db.add(admin_user)
     db.commit()
