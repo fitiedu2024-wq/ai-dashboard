@@ -929,6 +929,3 @@ echo "🔑 Admin Login:"
 echo "   Email: 3ayoty@gmail.com"
 echo "   Password: AliTia20"
 echo ""
-
-ENDSCRIPT
-

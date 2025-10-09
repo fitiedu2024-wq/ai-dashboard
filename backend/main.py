@@ -157,3 +157,77 @@ def get_activity_logs(token: str = Depends(oauth2_scheme), db: Session = Depends
     except jwt.JWTError:
         raise HTTPException(401, "Invalid token")
 
+
+# ============================================
+# ADMIN ENDPOINTS
+# ============================================
+
+@app.get("/api/admin/stats")
+def get_admin_stats(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Get admin statistics"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        email = payload.get("sub")
+        
+        # Check if admin
+        if email != DEFAULT_ADMIN["email"]:
+            raise HTTPException(403, "Admin access required")
+        
+        # Get stats
+        total_users = db.query(User).count()
+        
+        return {
+            "total_users": total_users,
+            "total_analyses": 0,
+            "active_today": 0,
+            "quota_used": 0
+        }
+    except jwt.JWTError:
+        raise HTTPException(401, "Invalid token")
+
+@app.get("/api/admin/users")
+def get_all_users(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Get all users"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        email = payload.get("sub")
+        
+        # Check if admin
+        if email != DEFAULT_ADMIN["email"]:
+            raise HTTPException(403, "Admin access required")
+        
+        users = db.query(User).all()
+        
+        return {
+            "users": [
+                {
+                    "id": u.id,
+                    "email": u.email,
+                    "quota": u.quota,
+                    "is_active": u.is_active,
+                    "created_at": u.created_at.isoformat() if hasattr(u, 'created_at') else None
+                }
+                for u in users
+            ]
+        }
+    except jwt.JWTError:
+        raise HTTPException(401, "Invalid token")
+
+@app.get("/api/admin/activity")
+def get_activity_logs(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Get activity logs"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        email = payload.get("sub")
+        
+        # Check if admin
+        if email != DEFAULT_ADMIN["email"]:
+            raise HTTPException(403, "Admin access required")
+        
+        # Return empty for now
+        return {
+            "logs": []
+        }
+    except jwt.JWTError:
+        raise HTTPException(401, "Invalid token")
+
