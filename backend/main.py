@@ -475,3 +475,5 @@ async def get_me(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
     except JWTError:
         raise HTTPException(401, "Invalid token")
 
+
+# Deployment trigger - Thu Oct  9 08:54:26 AM UTC 2025
