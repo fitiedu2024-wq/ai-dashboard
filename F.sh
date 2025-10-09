@@ -2,424 +2,317 @@
 
 set -e
 
-echo "🎯 TARGETED FIX - Creating Missing Pages"
-echo "========================================"
+echo "🎯 FINAL COMPLETE FIX - Backend Endpoints"
+echo "=========================================="
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m'
 
-cd frontend
-
 # ============================================
-# FIX 1: CREATE MISSING AI TOOLS PAGES
+# BACKEND - ADD ALL MISSING ENDPOINTS
 # ============================================
 
-echo -e "${BLUE}📱 Creating missing AI Tools pages...${NC}"
+echo -e "${BLUE}🔧 Adding missing backend endpoints...${NC}"
 
-# Analytics Page
-cat > "app/(dashboard)/analytics/page.tsx" << 'TSX'
+cd backend
+
+# Update main.py with ALL missing endpoints
+cat >> main.py << 'PYTHON'
+
+# ============================================
+# MISSING ENDPOINTS - ANALYTICS & AI TOOLS
+# ============================================
+
+@app.get("/api/analytics/dashboard")
+async def analytics_dashboard(token: str = Depends(oauth2_scheme)):
+    """Analytics dashboard data"""
+    try:
+        # Generate sample data for last 30 days
+        daily_data = []
+        for i in range(30, 0, -1):
+            date = (datetime.utcnow() - timedelta(days=i)).date()
+            daily_data.append({
+                "date": date.isoformat(),
+                "total": 10 + (i % 5) * 3
+            })
+        
+        return {
+            "success": True,
+            "data": {
+                "daily": daily_data,
+                "raw": []
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+class ImageRequest(BaseModel):
+    image_url: str
+
+@app.post("/api/vision/detect-brands")
+async def detect_brands(request: ImageRequest, token: str = Depends(oauth2_scheme)):
+    """Brand detection using Vision AI (demo)"""
+    try:
+        return {
+            "success": True,
+            "data": {
+                "logos": [
+                    {"name": "Sample Brand", "confidence": 95.5}
+                ],
+                "web_entities": [
+                    {"name": "Technology", "score": 85}
+                ],
+                "labels": [
+                    {"name": "Product", "confidence": 92},
+                    {"name": "Marketing", "confidence": 88}
+                ]
+            },
+            "note": "Demo data - GCP Vision API not configured"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+class SentimentRequest(BaseModel):
+    text: str
+
+@app.post("/api/language/sentiment")
+async def sentiment_analysis(request: SentimentRequest, token: str = Depends(oauth2_scheme)):
+    """Sentiment analysis (demo)"""
+    try:
+        # Simple sentiment scoring
+        positive_words = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'best']
+        negative_words = ['bad', 'poor', 'terrible', 'awful', 'horrible', 'worst', 'hate', 'disappointing']
+        
+        text_lower = request.text.lower()
+        pos_count = sum(1 for word in positive_words if word in text_lower)
+        neg_count = sum(1 for word in negative_words if word in text_lower)
+        
+        if pos_count > neg_count:
+            sentiment_label = "Positive"
+            score = 0.7
+        elif neg_count > pos_count:
+            sentiment_label = "Negative"
+            score = -0.7
+        else:
+            sentiment_label = "Neutral"
+            score = 0.0
+        
+        return {
+            "success": True,
+            "sentiment": {
+                "score": round(score, 3),
+                "magnitude": abs(score),
+                "label": sentiment_label
+            },
+            "entities": [
+                {
+                    "name": "Product",
+                    "type": "CONSUMER_GOOD",
+                    "salience": 0.8,
+                    "sentiment": {
+                        "score": round(score, 3),
+                        "magnitude": abs(score)
+                    }
+                }
+            ],
+            "note": "Demo data - GCP Language API not configured"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# Additional endpoint for compatibility
+@app.get("/api/me")
+async def get_me(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Get current user info (alias for /api/user)"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        email = payload.get("sub")
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(401, "User not found")
+        return {
+            "email": user.email,
+            "id": user.id,
+            "quota": user.quota,
+            "is_admin": user.role == "admin" if hasattr(user, 'role') else user.email == DEFAULT_ADMIN["email"]
+        }
+    except JWTError:
+        raise HTTPException(401, "Invalid token")
+
+PYTHON
+
+echo -e "${GREEN}✅ Backend endpoints added${NC}"
+
+# ============================================
+# FRONTEND - REMOVE DEMO CREDENTIALS
+# ============================================
+
+echo -e "${BLUE}📱 Updating login page...${NC}"
+
+cd ../frontend
+
+cat > app/login/page.tsx << 'TSX'
 'use client';
 
-import { useState, useEffect } from 'react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Activity, Target } from 'lucide-react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Mail, Lock, Loader2 } from 'lucide-react';
 
-export default function Analytics() {
-  const [data, setData] = useState<any>(null);
+export default function Login() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-  const loadData = async () => {
-    const token = localStorage.getItem('token');
     try {
-      const res = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/analytics/dashboard', {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const formData = new URLSearchParams();
+      formData.append('username', email);
+      formData.append('password', password);
+
+      const response = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData
       });
-      const result = await res.json();
-      setData(result.data);
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('token', data.access_token);
+        router.push('/dashboard');
+      } else {
+        alert('Invalid credentials');
+      }
     } catch (error) {
-      console.error('Error:', error);
+      alert('Login failed');
     }
+    setLoading(false);
   };
 
   return (
-    <div className="p-8 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-          Analytics Dashboard
-        </h1>
-        <p className="text-gray-200 text-lg mb-8">Platform insights & metrics</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="glass rounded-2xl p-6 border border-white/20">
-            <Activity className="w-8 h-8 text-blue-400 mb-4" />
-            <div className="text-4xl font-bold text-white mb-2">1,284</div>
-            <div className="text-sm text-gray-400">Total Analyses</div>
-          </div>
-          <div className="glass rounded-2xl p-6 border border-white/20">
-            <Target className="w-8 h-8 text-green-400 mb-4" />
-            <div className="text-4xl font-bold text-white mb-2">428</div>
-            <div className="text-sm text-gray-400">Competitors Tracked</div>
-          </div>
-          <div className="glass rounded-2xl p-6 border border-white/20">
-            <TrendingUp className="w-8 h-8 text-purple-400 mb-4" />
-            <div className="text-4xl font-bold text-white mb-2">3.2K</div>
-            <div className="text-sm text-gray-400">Insights Generated</div>
-          </div>
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-gray-900 to-pink-900">
+        {/* Floating particles */}
+        <div className="absolute inset-0">
+          {[...Array(100)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute rounded-full"
+              style={{
+                width: Math.random() * 4 + 1 + 'px',
+                height: Math.random() * 4 + 1 + 'px',
+                top: Math.random() * 100 + '%',
+                left: Math.random() * 100 + '%',
+                background: `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.1})`,
+                animation: `float ${Math.random() * 10 + 5}s infinite ease-in-out`,
+                animationDelay: `${Math.random() * 5}s`
+              }}
+            />
+          ))}
         </div>
 
-        {data?.daily && (
-          <div className="glass rounded-2xl p-8 border border-white/20">
-            <h3 className="text-2xl font-bold text-white mb-6">Daily Activity</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={data.daily}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="date" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
-                <Tooltip 
-                  contentStyle={{ background: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                  labelStyle={{ color: '#F3F4F6' }}
+        {/* Gradient orbs */}
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+      </div>
+
+      {/* Login card */}
+      <div className="relative z-10 w-full max-w-md">
+        <div className="glass rounded-3xl p-8 border border-white/20 backdrop-blur-xl shadow-2xl">
+          {/* Logo */}
+          <div className="flex justify-center mb-8">
+            <div className="relative animate-float">
+              <img 
+                src="https://image2url.com/images/1759984925499-cddfdfef-f863-48f3-8049-17d9ec29e066.png"
+                alt="AI Grinners Logo"
+                className="w-32 h-32 object-contain drop-shadow-2xl"
+              />
+            </div>
+          </div>
+
+          <h1 className="text-4xl font-bold text-center mb-2 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent animate-gradient">
+            Welcome Back
+          </h1>
+          <p className="text-center text-gray-300 mb-8">AI Grinners Marketing Intelligence</p>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold mb-2 text-gray-200">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400/20 transition-all"
+                  required
                 />
-                <Legend />
-                <Line type="monotone" dataKey="total" stroke="#7C3AED" strokeWidth={3} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-TSX
-
-# Vision AI Page
-cat > "app/(dashboard)/vision-ai/page.tsx" << 'TSX'
-'use client';
-
-import { useState } from 'react';
-import { Eye, Upload, Loader2 } from 'lucide-react';
-
-export default function VisionAI() {
-  const [imageUrl, setImageUrl] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<any>(null);
-
-  const analyzeImage = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/vision/detect-brands', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ image_url: imageUrl })
-      });
-      const data = await response.json();
-      setResults(data);
-    } catch (error) {
-      console.error('Error:', error);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div className="p-8 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-          Vision AI
-        </h1>
-        <p className="text-gray-200 text-lg mb-8">Logo & Brand Detection</p>
-        
-        <div className="glass rounded-2xl p-8 mb-8 border border-white/20">
-          <div className="mb-6">
-            <label className="block text-sm font-bold mb-3 text-blue-300">Image URL</label>
-            <input
-              type="text"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://example.com/image.jpg"
-              className="w-full p-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
-              disabled={loading}
-            />
-          </div>
-          
-          <button
-            onClick={analyzeImage}
-            disabled={loading || !imageUrl}
-            className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3"
-          >
-            {loading ? <><Loader2 className="w-5 h-5 animate-spin" />Analyzing...</> : <><Eye className="w-5 h-5" />Detect Brands</>}
-          </button>
-        </div>
-
-        {results?.success && (
-          <div className="space-y-6">
-            {results.data.logos.length > 0 && (
-              <div className="glass rounded-2xl p-8 border border-white/20">
-                <h3 className="text-2xl font-bold text-white mb-6">🏷️ Detected Logos</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {results.data.logos.map((logo: any, idx: number) => (
-                    <div key={idx} className="bg-white/5 p-5 rounded-xl">
-                      <div className="font-bold text-white">{logo.name}</div>
-                      <div className="text-sm text-green-400">{logo.confidence}% confident</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-TSX
-
-# Sentiment Page
-cat > "app/(dashboard)/sentiment/page.tsx" << 'TSX'
-'use client';
-
-import { useState } from 'react';
-import { MessageSquare, Loader2, TrendingUp } from 'lucide-react';
-
-export default function Sentiment() {
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<any>(null);
-
-  const analyze = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/language/sentiment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ text })
-      });
-      const data = await response.json();
-      setResults(data);
-    } catch (error) {
-      console.error('Error:', error);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div className="p-8 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-          Sentiment Analysis
-        </h1>
-        <p className="text-gray-200 text-lg mb-8">AI-powered emotion detection</p>
-        
-        <div className="glass rounded-2xl p-8 mb-8 border border-white/20">
-          <div className="mb-6">
-            <label className="block text-sm font-bold mb-3 text-purple-300">Text to Analyze</label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Enter text for sentiment analysis..."
-              rows={6}
-              className="w-full p-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:border-purple-400 focus:outline-none resize-none"
-              disabled={loading}
-            />
-          </div>
-          
-          <button
-            onClick={analyze}
-            disabled={loading || !text}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3"
-          >
-            {loading ? <><Loader2 className="w-5 h-5 animate-spin" />Analyzing...</> : <><MessageSquare className="w-5 h-5" />Analyze Sentiment</>}
-          </button>
-        </div>
-
-        {results?.success && (
-          <div className="glass rounded-2xl p-8 border-2 border-green-400/50">
-            <div className="flex items-center gap-6 mb-6">
-              <TrendingUp className="w-12 h-12 text-green-400" />
-              <div>
-                <div className="text-4xl font-bold text-white">{results.sentiment.label}</div>
-                <div className="text-gray-300">Score: {results.sentiment.score}</div>
               </div>
             </div>
 
-            {results.entities.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-xl font-bold text-white mb-4">Key Entities</h3>
-                <div className="space-y-2">
-                  {results.entities.map((entity: any, idx: number) => (
-                    <div key={idx} className="bg-white/5 p-4 rounded-xl">
-                      <div className="font-bold text-white">{entity.name}</div>
-                      <div className="text-sm text-gray-400">Type: {entity.type}</div>
-                    </div>
-                  ))}
-                </div>
+            <div>
+              <label className="block text-sm font-bold mb-2 text-gray-200">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400/20 transition-all"
+                  required
+                />
               </div>
-            )}
-          </div>
-        )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-bold text-lg hover:shadow-2xl hover:shadow-purple-500/50 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+          </form>
+        </div>
       </div>
+
+      <style jsx>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        @keyframes gradient {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+        .animate-gradient {
+          background-size: 200% auto;
+          animation: gradient 3s linear infinite;
+        }
+      `}</style>
     </div>
   );
 }
 TSX
 
-echo -e "${GREEN}✅ AI Tools pages created${NC}"
-
-# ============================================
-# FIX 2: ADMIN AUTHENTICATION ISSUE
-# ============================================
-
-echo -e "${BLUE}🔐 Fixing Admin authentication...${NC}"
-
-# Update admin pages to check auth properly
-cat > app/admin/page.tsx << 'TSX'
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Users, Activity, TrendingUp, Zap } from 'lucide-react';
-import Link from 'next/link';
-
-export default function AdminDashboard() {
-  const router = useRouter();
-  const [stats, setStats] = useState<any>({});
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    checkAdminAccess();
-  }, []);
-
-  const checkAdminAccess = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.log('No token found, redirecting to login');
-      router.push('/login');
-      return;
-    }
-
-    try {
-      // First, check if user is admin
-      const userResponse = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/user', {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!userResponse.ok) {
-        console.log('User check failed, redirecting to login');
-        localStorage.removeItem('token');
-        router.push('/login');
-        return;
-      }
-
-      const userData = await userResponse.json();
-      console.log('User data:', userData);
-
-      if (!userData.is_admin) {
-        alert('Admin access required');
-        router.push('/dashboard');
-        return;
-      }
-
-      setIsAdmin(true);
-
-      // Now fetch stats
-      const statsResponse = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/admin/stats', {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData);
-      }
-      
-      setLoading(false);
-    } catch (error) {
-      console.error('Error checking admin access:', error);
-      alert('Error checking admin access. Please try logging in again.');
-      router.push('/login');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <div className="text-xl text-white">Checking admin access...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return null;
-  }
-
-  return (
-    <div className="p-8 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-5xl font-bold mb-8 bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text text-transparent">
-          Admin Dashboard
-        </h1>
-        
-        <div className="grid grid-cols-4 gap-6 mb-8">
-          <div className="glass rounded-2xl p-6 border border-white/20">
-            <Users className="w-8 h-8 text-blue-400 mb-4" />
-            <div className="text-4xl font-bold text-white">{stats.total_users || 0}</div>
-            <div className="text-sm text-gray-400">Total Users</div>
-          </div>
-          <div className="glass rounded-2xl p-6 border border-white/20">
-            <Activity className="w-8 h-8 text-green-400 mb-4" />
-            <div className="text-4xl font-bold text-white">{stats.online_users || 0}</div>
-            <div className="text-sm text-gray-400">Online Now</div>
-          </div>
-          <div className="glass rounded-2xl p-6 border border-white/20">
-            <TrendingUp className="w-8 h-8 text-purple-400 mb-4" />
-            <div className="text-4xl font-bold text-white">{stats.total_reports || 0}</div>
-            <div className="text-sm text-gray-400">Total Reports</div>
-          </div>
-          <div className="glass rounded-2xl p-6 border border-white/20">
-            <Zap className="w-8 h-8 text-orange-400 mb-4" />
-            <div className="text-4xl font-bold text-white">{stats.reports_today || 0}</div>
-            <div className="text-sm text-gray-400">Reports Today</div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-6">
-          <Link href="/admin/users" className="glass rounded-2xl p-8 border border-white/20 card-hover">
-            <Users className="w-12 h-12 text-blue-400 mb-4" />
-            <h3 className="text-2xl font-bold text-white mb-2">User Management</h3>
-            <p className="text-gray-300">Manage all platform users</p>
-          </Link>
-          <Link href="/admin/activity" className="glass rounded-2xl p-8 border border-white/20 card-hover">
-            <Activity className="w-12 h-12 text-purple-400 mb-4" />
-            <h3 className="text-2xl font-bold text-white mb-2">Activity Logs</h3>
-            <p className="text-gray-300">Monitor system activity</p>
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-TSX
-
-echo -e "${GREEN}✅ Admin auth fixed${NC}"
+echo -e "${GREEN}✅ Login page updated (demo credentials removed)${NC}"
 
 # ============================================
 # DEPLOY
@@ -427,25 +320,24 @@ echo -e "${GREEN}✅ Admin auth fixed${NC}"
 
 cd ..
 
-echo -e "${BLUE}🚀 Deploying fixes...${NC}"
+echo -e "${BLUE}🚀 Deploying final fixes...${NC}"
 
 git add .
-git commit -m "🎯 Targeted Fix: Created missing AI pages + Fixed admin auth"
+git commit -m "🎯 Final Fix: Added all missing backend endpoints + Clean login"
 git push origin main
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}✅ TARGETED FIX COMPLETE!${NC}"
+echo -e "${GREEN}✅ FINAL FIX COMPLETE!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "Fixed:"
-echo "  ✅ Created analytics page"
-echo "  ✅ Created vision-ai page"
-echo "  ✅ Created sentiment page"
-echo "  ✅ Fixed admin authentication flow"
+echo "  ✅ /api/analytics/dashboard endpoint"
+echo "  ✅ /api/vision/detect-brands endpoint"
+echo "  ✅ /api/language/sentiment endpoint"
+echo "  ✅ /api/me endpoint (alias)"
+echo "  ✅ Removed demo credentials from login"
 echo ""
-echo "Test now:"
-echo "  1. Go to /analytics - should work"
-echo "  2. Go to /admin - should check auth properly"
-echo "  3. Check browser console for debug logs"
+echo "All 404 errors should be resolved now!"
 echo ""
+

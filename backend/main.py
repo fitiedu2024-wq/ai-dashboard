@@ -354,3 +354,124 @@ def get_user_reports(user_id: int, token: str = Depends(oauth2_scheme), db: Sess
 # Keep other endpoints (ads, seo, keywords, analytics, vision, sentiment)
 # ... (previous code for these endpoints)
 
+
+# ============================================
+# MISSING ENDPOINTS - ANALYTICS & AI TOOLS
+# ============================================
+
+@app.get("/api/analytics/dashboard")
+async def analytics_dashboard(token: str = Depends(oauth2_scheme)):
+    """Analytics dashboard data"""
+    try:
+        # Generate sample data for last 30 days
+        daily_data = []
+        for i in range(30, 0, -1):
+            date = (datetime.utcnow() - timedelta(days=i)).date()
+            daily_data.append({
+                "date": date.isoformat(),
+                "total": 10 + (i % 5) * 3
+            })
+        
+        return {
+            "success": True,
+            "data": {
+                "daily": daily_data,
+                "raw": []
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+class ImageRequest(BaseModel):
+    image_url: str
+
+@app.post("/api/vision/detect-brands")
+async def detect_brands(request: ImageRequest, token: str = Depends(oauth2_scheme)):
+    """Brand detection using Vision AI (demo)"""
+    try:
+        return {
+            "success": True,
+            "data": {
+                "logos": [
+                    {"name": "Sample Brand", "confidence": 95.5}
+                ],
+                "web_entities": [
+                    {"name": "Technology", "score": 85}
+                ],
+                "labels": [
+                    {"name": "Product", "confidence": 92},
+                    {"name": "Marketing", "confidence": 88}
+                ]
+            },
+            "note": "Demo data - GCP Vision API not configured"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+class SentimentRequest(BaseModel):
+    text: str
+
+@app.post("/api/language/sentiment")
+async def sentiment_analysis(request: SentimentRequest, token: str = Depends(oauth2_scheme)):
+    """Sentiment analysis (demo)"""
+    try:
+        # Simple sentiment scoring
+        positive_words = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'best']
+        negative_words = ['bad', 'poor', 'terrible', 'awful', 'horrible', 'worst', 'hate', 'disappointing']
+        
+        text_lower = request.text.lower()
+        pos_count = sum(1 for word in positive_words if word in text_lower)
+        neg_count = sum(1 for word in negative_words if word in text_lower)
+        
+        if pos_count > neg_count:
+            sentiment_label = "Positive"
+            score = 0.7
+        elif neg_count > pos_count:
+            sentiment_label = "Negative"
+            score = -0.7
+        else:
+            sentiment_label = "Neutral"
+            score = 0.0
+        
+        return {
+            "success": True,
+            "sentiment": {
+                "score": round(score, 3),
+                "magnitude": abs(score),
+                "label": sentiment_label
+            },
+            "entities": [
+                {
+                    "name": "Product",
+                    "type": "CONSUMER_GOOD",
+                    "salience": 0.8,
+                    "sentiment": {
+                        "score": round(score, 3),
+                        "magnitude": abs(score)
+                    }
+                }
+            ],
+            "note": "Demo data - GCP Language API not configured"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# Additional endpoint for compatibility
+@app.get("/api/me")
+async def get_me(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Get current user info (alias for /api/user)"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        email = payload.get("sub")
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(401, "User not found")
+        return {
+            "email": user.email,
+            "id": user.id,
+            "quota": user.quota,
+            "is_admin": user.role == "admin" if hasattr(user, 'role') else user.email == DEFAULT_ADMIN["email"]
+        }
+    except JWTError:
+        raise HTTPException(401, "Invalid token")
+

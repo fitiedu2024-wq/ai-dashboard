@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Loader2 } from 'lucide-react';
-import Image from 'next/image';
 
 export default function Login() {
   const router = useRouter();
@@ -132,10 +131,6 @@ export default function Login() {
               )}
             </button>
           </form>
-
-          <p className="text-center text-sm text-gray-400 mt-6">
-            Demo: 3ayoty@gmail.com / AliTia20
-          </p>
         </div>
       </div>
 
