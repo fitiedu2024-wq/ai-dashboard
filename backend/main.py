@@ -14,6 +14,34 @@ from analyzers import analyze_domain
 
 app = FastAPI()
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database and reset admin"""
+    Base.metadata.create_all(bind=engine)
+    
+    db = SessionLocal()
+    
+    # Clear all users
+    try:
+        db.query(User).delete()
+        db.commit()
+        print("🗑️ Cleared old users")
+    except:
+        db.rollback()
+    
+    # Create admin
+    admin_user = User(
+        email=DEFAULT_ADMIN["email"],
+        hashed_password=get_password_hash(DEFAULT_ADMIN["password"]),
+        name=DEFAULT_ADMIN["name"]
+    )
+    db.add(admin_user)
+    db.commit()
+    print(f"✅ Admin created: {DEFAULT_ADMIN['email']}")
+    
+    db.close()
+
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
