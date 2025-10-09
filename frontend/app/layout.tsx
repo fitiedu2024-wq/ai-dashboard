@@ -1,21 +1,21 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import './globals.css'
+import { Inter } from 'next/font/google'
 
-export const metadata: Metadata = {
-  title: "AI Grinners - Marketing Intelligence",
-  description: "Competitor analysis powered by AI",
-};
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata = {
+  title: 'AI Grinners - Marketing Intelligence',
+  description: 'Advanced AI-powered marketing intelligence platform',
+}
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="en">
-      <body>
-        {children}
-      </body>
+      <body className={inter.className}>{children}</body>
     </html>
-  );
+  )
 }
