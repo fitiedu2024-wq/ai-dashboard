@@ -92,7 +92,7 @@ export default function AdsAnalysis() {
                 <div className="text-gray-300 mb-4">View all active ads from this advertiser</div>
               </div>
 
-              
+              <a
                 href={results.data.platforms.meta.url}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -108,7 +108,7 @@ export default function AdsAnalysis() {
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
                   <svg className="w-6 h-6 text-purple-400" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/>
+                    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0012.14-4.36v-7.2a6.88 6.88 0 001.48.15c.14 0 .27 0 .4-.01V6.7z"/>
                   </svg>
                 </div>
                 <div>
@@ -123,7 +123,7 @@ export default function AdsAnalysis() {
                 </div>
               </div>
 
-              
+              <a
                 href={results.data.platforms.tiktok.url}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -151,7 +151,7 @@ export default function AdsAnalysis() {
                 </div>
               </div>
 
-              
+              <a
                 href={results.data.platforms.google.url}
                 target="_blank"
                 rel="noopener noreferrer"
