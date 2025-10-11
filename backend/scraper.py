@@ -208,9 +208,12 @@ def extract_keywords_with_yake(text: str, top_n: int = 20) -> List[Dict]:
         results = []
         for kw, score in keywords:
             results.append({
-                "keyword": kw,
-                "relevance_score": round((1 - score) * 100, 2),  # Convert to percentage
-                "search_volume": "Fetching..."  # Will add Google API later
+                "term": kw,
+                "volume": "Analyzing...",
+                "difficulty": "Medium" if score > 0.5 else "Low",
+                "priority": "high" if score < 0.3 else "medium",
+                "current_rank": "Not ranking",
+                "cpc": "N/A"
             })
         
         return results
