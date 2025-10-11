@@ -257,7 +257,19 @@ async def keyword_analysis(request: KeywordRequest, req: Request = None, token: 
         # Combine all text from pages
         all_text = ""
         for page in site_data.get('pages', []):
-            all_text += page.get('content', '') + " "
+            # Extract text from analysis
+            if 'analysis' in page:
+                analysis = page['analysis']
+                # Get title
+                if 'title' in analysis:
+                    all_text += analysis['title'].get('text', '') + " "
+                # Get meta description
+                if 'meta' in analysis:
+                    all_text += analysis['meta'].get('description', '') + " "
+                # Get headings
+                if 'content' in analysis and 'headings' in analysis['content']:
+                    for h in analysis['content']['headings']:
+                        all_text += h + " "
         
         # Extract keywords using YAKE
         from scraper import extract_keywords_with_yake
