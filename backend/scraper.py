@@ -134,11 +134,11 @@ def crawl_site(domain: str, max_pages: int = 50) -> Dict:
             pages_data.append(page_data)
             
             if len(pages_data) < max_pages:
-                for link in page_data.get('internal_links', [])[:10]:
+                for link in page_data.get('internal_links', [])[:30]:
                     if link not in visited and link not in to_visit:
                         to_visit.append(link)
         
-        time.sleep(0.3)
+        time.sleep(0.1)
     
     print(f"✅ Crawled {len(pages_data)} pages")
     
@@ -198,7 +198,7 @@ def extract_keywords_with_yake(text: str, top_n: int = 20) -> List[Dict]:
             dedupLim=0.9,
             dedupFunc='seqm',
             windowsSize=1,
-            top=top_n
+            top=70
         )
         
         # Extract keywords
