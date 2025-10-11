@@ -91,6 +91,10 @@ def get_page_content(url: str, timeout: int = 15) -> Dict:
         
         # Use html.parser (built-in, no dependencies)
         soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Detect tracking pixels
+        html_content = str(response.content)
+        trackers = detect_tracking_pixels(soup, html_content)
         analysis = analyze_page_technical_seo(soup, url)
         
         links = []
@@ -101,7 +105,7 @@ def get_page_content(url: str, timeout: int = 15) -> Dict:
                 if not any(ext in full_url.lower() for ext in ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '#', 'mailto:', 'tel:']):
                     links.append(full_url)
         
-        return {'url': url, 'status': 'success', 'analysis': analysis, 'internal_links': list(set(links))[:30]}
+        return {'url': url, 'status': 'success', 'analysis': analysis, 'trackers': trackers, 'internal_links': list(set(links))[:30]}
     
     except Exception as e:
         return {'url': url, 'status': 'error', 'error': str(e)}
@@ -169,6 +173,10 @@ def find_social_accounts(domain: str) -> Dict:
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.content, 'html.parser')
         
+        # Detect tracking pixels
+        html_content = str(response.content)
+        trackers = detect_tracking_pixels(soup, html_content)
+        
         social = {'facebook': None, 'tiktok': None, 'instagram': None}
         
         for link in soup.find_all('a', href=True):
@@ -221,3 +229,54 @@ def extract_keywords_with_yake(text: str, top_n: int = 20) -> List[Dict]:
         print(f"Error extracting keywords: {str(e)}")
         return []
 
+
+def detect_tracking_pixels(soup, html_content: str) -> Dict:
+    """Detect tracking pixels and analytics"""
+    trackers = {
+        "google_analytics": False,
+        "google_tag_manager": False,
+        "facebook_pixel": False,
+        "tiktok_pixel": False,
+        "linkedin_insight": False,
+        "hotjar": False,
+        "google_analytics_id": None,
+        "gtm_id": None,
+        "fb_pixel_id": None
+    }
+    
+    # Google Analytics (GA4 & Universal)
+    if 'google-analytics.com/analytics.js' in html_content or 'googletagmanager.com/gtag/js' in html_content:
+        trackers["google_analytics"] = True
+        # Extract GA ID
+        import re
+        ga_match = re.search(r'G-[A-Z0-9]+|UA-[0-9]+-[0-9]+', html_content)
+        if ga_match:
+            trackers["google_analytics_id"] = ga_match.group(0)
+    
+    # Google Tag Manager
+    if 'googletagmanager.com/gtm.js' in html_content:
+        trackers["google_tag_manager"] = True
+        gtm_match = re.search(r'GTM-[A-Z0-9]+', html_content)
+        if gtm_match:
+            trackers["gtm_id"] = gtm_match.group(0)
+    
+    # Facebook Pixel
+    if 'connect.facebook.net' in html_content or 'fbevents.js' in html_content:
+        trackers["facebook_pixel"] = True
+        fb_match = re.search(r"fbq\('init',\s*'(\d+)'", html_content)
+        if fb_match:
+            trackers["fb_pixel_id"] = fb_match.group(1)
+    
+    # TikTok Pixel
+    if 'analytics.tiktok.com' in html_content or 'ttq.load' in html_content:
+        trackers["tiktok_pixel"] = True
+    
+    # LinkedIn Insight Tag
+    if 'snap.licdn.com' in html_content or '_linkedin_partner_id' in html_content:
+        trackers["linkedin_insight"] = True
+    
+    # Hotjar
+    if 'static.hotjar.com' in html_content:
+        trackers["hotjar"] = True
+    
+    return trackers

@@ -226,9 +226,43 @@ async def seo_comparison(request: SEORequest, req: Request = None, token: str = 
         for comp in request.competitors:
             competitors_data[comp] = crawl_site(comp, 10)
         insights = []
-        avg_comp_score = sum(c['avg_seo_score'] for c in competitors_data.values()) / len(competitors_data) if competitors_data else 0
-        if your_data['avg_seo_score'] > avg_comp_score:
-            insights.append(f"✅ Your SEO score is higher")
+        
+        # Calculate competitor averages
+        if competitors_data:
+            avg_comp_score = sum(c['avg_seo_score'] for c in competitors_data.values()) / len(competitors_data)
+            avg_comp_words = sum(c['avg_word_count'] for c in competitors_data.values()) / len(competitors_data)
+            avg_comp_alt = sum(c['avg_alt_coverage'] for c in competitors_data.values()) / len(competitors_data)
+            avg_comp_schema = sum(c['schema_coverage'] for c in competitors_data.values()) / len(competitors_data)
+            
+            # SEO Score comparison
+            score_diff = your_data['avg_seo_score'] - avg_comp_score
+            if score_diff > 10:
+                insights.append(f"✅ Your SEO score ({your_data['avg_seo_score']}) is {int(score_diff)} points higher than competitors")
+            elif score_diff < -10:
+                insights.append(f"⚠️ Your SEO score is {int(abs(score_diff))} points lower - improve technical SEO")
+            else:
+                insights.append(f"📊 Your SEO score is competitive (difference: {int(score_diff)} points)")
+            
+            # Content length comparison
+            word_diff_pct = ((your_data['avg_word_count'] - avg_comp_words) / avg_comp_words * 100) if avg_comp_words > 0 else 0
+            if word_diff_pct < -20:
+                insights.append(f"⚠️ Your content is {int(abs(word_diff_pct))}% shorter than competitors - add more valuable content")
+            elif word_diff_pct > 20:
+                insights.append(f"✅ Your content is {int(word_diff_pct)}% longer than competitors")
+            
+            # Alt text coverage
+            alt_diff = your_data['avg_alt_coverage'] - avg_comp_alt
+            if alt_diff < -15:
+                insights.append(f"⚠️ Your image alt text coverage is {int(abs(alt_diff))}% lower - improve accessibility")
+            elif alt_diff > 15:
+                insights.append(f"✅ Your alt text coverage is {int(alt_diff)}% better than competitors")
+            
+            # Schema markup
+            schema_diff = your_data['schema_coverage'] - avg_comp_schema
+            if schema_diff < -20:
+                insights.append(f"⚠️ Only {your_data['schema_coverage']}% of your pages have schema vs {int(avg_comp_schema)}% for competitors")
+            elif your_data['schema_coverage'] > 80:
+                insights.append(f"✅ Excellent schema coverage ({your_data['schema_coverage']}%)")
         if user:
             log_activity(db, user.id, user.email, "SEO Comparison", f"Compared {request.your_domain}", get_client_ip(req))
         return {
