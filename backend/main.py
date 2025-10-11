@@ -250,29 +250,38 @@ async def keyword_analysis(request: KeywordRequest, req: Request = None, token: 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         user = db.query(User).filter(User.email == payload.get("sub")).first()
+        
+        # Crawl site to get content
         site_data = crawl_site(request.domain, 15)
-        keywords = [
-            {"term": "AI marketing automation", "volume": "12.5K", "difficulty": "Medium", "priority": "high", "current_rank": "Not ranking", "cpc": "$8.50"},
-            {"term": "competitive intelligence tools", "volume": "8.2K", "difficulty": "Low", "priority": "high", "current_rank": "Not ranking", "cpc": "$6.20"},
-        ]
+        
+        # Combine all text from pages
+        all_text = ""
+        for page in site_data.get('pages', []):
+            all_text += page.get('content', '') + " "
+        
+        # Extract keywords using YAKE
+        from scraper import extract_keywords_with_yake
+        keywords = extract_keywords_with_yake(all_text, top_n=20)
+        
+        # Log activity
         if user:
             log_activity(db, user.id, user.email, "Keyword Analysis", f"Analyzed keywords for {request.domain}", get_client_ip(req))
+        
         return {
             "success": True,
             "data": {
                 "site_analysis": site_data,
                 "keywords": keywords,
                 "opportunities": len(keywords),
-                "recommendations": ["Focus on long-tail keywords"]
+                "recommendations": [
+                    f"Found {len(keywords)} relevant keywords from your content",
+                    "Focus on high relevance score keywords first"
+                ]
             }
         }
     except Exception as e:
+        print(f"Error in keyword analysis: {str(e)}")
         return {"success": False, "error": str(e)}
-
-@app.get("/api/analytics/dashboard")
-async def analytics_dashboard(token: str = Depends(oauth2_scheme)):
-    daily_data = []
-    for i in range(30, 0, -1):
         date = (datetime.utcnow() - timedelta(days=i)).date()
         daily_data.append({"date": date.isoformat(), "total": 10 + (i % 5) * 3})
     return {"success": True, "data": {"daily": daily_data}}

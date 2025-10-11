@@ -185,3 +185,36 @@ def find_social_accounts(domain: str) -> Dict:
         return social
     except:
         return {'facebook': None, 'tiktok': None, 'instagram': None}
+
+def extract_keywords_with_yake(text: str, top_n: int = 20) -> List[Dict]:
+    """Extract keywords from text using YAKE"""
+    try:
+        import yake
+        
+        # Configure YAKE
+        kw_extractor = yake.KeywordExtractor(
+            lan="en",
+            n=3,  # max 3-word phrases
+            dedupLim=0.9,
+            dedupFunc='seqm',
+            windowsSize=1,
+            top=top_n
+        )
+        
+        # Extract keywords
+        keywords = kw_extractor.extract_keywords(text)
+        
+        # Format results
+        results = []
+        for kw, score in keywords:
+            results.append({
+                "keyword": kw,
+                "relevance_score": round((1 - score) * 100, 2),  # Convert to percentage
+                "search_volume": "Fetching..."  # Will add Google API later
+            })
+        
+        return results
+    except Exception as e:
+        print(f"Error extracting keywords: {str(e)}")
+        return []
+
