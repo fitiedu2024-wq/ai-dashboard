@@ -1,12 +1,20 @@
 """
 Secure credentials management
+All sensitive data is loaded from environment variables
 """
 import bcrypt
+import os
+import secrets
 
+# Load admin credentials from environment variables
 DEFAULT_ADMIN = {
-    "email": "3ayoty@gmail.com",
-    "password": "AliTia20"
+    "email": os.getenv("ADMIN_EMAIL", "admin@example.com"),
+    "password": os.getenv("ADMIN_PASSWORD", secrets.token_urlsafe(16))
 }
+
+# Warn if using default credentials
+if not os.getenv("ADMIN_EMAIL") or not os.getenv("ADMIN_PASSWORD"):
+    print("⚠️  WARNING: Using default admin credentials. Set ADMIN_EMAIL and ADMIN_PASSWORD environment variables!")
 
 def get_password_hash(password: str) -> str:
     """Hash password using bcrypt directly"""

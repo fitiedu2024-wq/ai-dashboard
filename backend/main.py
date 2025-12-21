@@ -1,30 +1,129 @@
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
 import os
+import logging
+import time
+from functools import wraps
+from collections import defaultdict
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import json
 import requests
+import asyncio
 
 from models import Base, engine, SessionLocal, User, ActivityLog, AnalysisReport
 from credentials import DEFAULT_ADMIN, get_password_hash, verify_password
 from scraper import crawl_site, find_social_accounts
 
-app = FastAPI(title="AI Grinners API")
+# ==================== LOGGING SETUP ====================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+    ]
+)
+logger = logging.getLogger("ai-grinners")
+
+# ==================== RATE LIMITING ====================
+class RateLimiter:
+    """Simple in-memory rate limiter"""
+    def __init__(self):
+        self.requests: Dict[str, List[float]] = defaultdict(list)
+        self.limits = {
+            "default": (60, 60),      # 60 requests per 60 seconds
+            "analyze": (10, 60),       # 10 analysis requests per minute
+            "login": (5, 60),          # 5 login attempts per minute
+        }
+
+    def is_allowed(self, key: str, limit_type: str = "default") -> bool:
+        """Check if request is allowed"""
+        now = time.time()
+        max_requests, window = self.limits.get(limit_type, self.limits["default"])
+
+        # Clean old requests
+        self.requests[key] = [t for t in self.requests[key] if now - t < window]
+
+        if len(self.requests[key]) >= max_requests:
+            return False
+
+        self.requests[key].append(now)
+        return True
+
+    def get_retry_after(self, key: str, limit_type: str = "default") -> int:
+        """Get seconds until rate limit resets"""
+        if not self.requests[key]:
+            return 0
+        max_requests, window = self.limits.get(limit_type, self.limits["default"])
+        oldest = min(self.requests[key])
+        return int(window - (time.time() - oldest))
+
+rate_limiter = RateLimiter()
+
+# ==================== CACHING ====================
+class SimpleCache:
+    """Simple in-memory cache with TTL"""
+    def __init__(self):
+        self.cache: Dict[str, tuple] = {}  # key: (value, expiry_time)
+
+    def get(self, key: str) -> Optional[Any]:
+        """Get cached value if not expired"""
+        if key in self.cache:
+            value, expiry = self.cache[key]
+            if time.time() < expiry:
+                logger.debug(f"Cache HIT: {key}")
+                return value
+            else:
+                del self.cache[key]
+        return None
+
+    def set(self, key: str, value: Any, ttl: int = 300):
+        """Cache value with TTL in seconds"""
+        self.cache[key] = (value, time.time() + ttl)
+        logger.debug(f"Cache SET: {key} (TTL: {ttl}s)")
+
+    def clear(self):
+        """Clear all cache"""
+        self.cache.clear()
+
+    def cleanup(self):
+        """Remove expired entries"""
+        now = time.time()
+        expired = [k for k, (v, exp) in self.cache.items() if exp < now]
+        for k in expired:
+            del self.cache[k]
+
+analysis_cache = SimpleCache()
+
+# ==================== APP SETUP ====================
+app = FastAPI(
+    title="AI Grinners API",
+    description="Marketing Intelligence & Competitive Analysis Platform",
+    version="3.0.0"
+)
+
+# CORS - Configure allowed origins from environment
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,https://ai-dashboard-frontend.onrender.com").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+# Security
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    logger.warning("⚠️  SECRET_KEY not set! Using random key (sessions won't persist across restarts)")
+    import secrets
+    SECRET_KEY = secrets.token_urlsafe(32)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
 def get_db():
@@ -84,19 +183,69 @@ async def startup():
 
 @app.get("/")
 def root():
-    return {"message": "AI Grinners API", "status": "running", "version": "2.0"}
+    return {"message": "AI Grinners API", "status": "running", "version": "3.0.0"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for monitoring"""
+    try:
+        # Check database connection
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        db_status = "healthy"
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
+        logger.error(f"Database health check failed: {e}")
+
+    return {
+        "status": "healthy" if db_status == "healthy" else "degraded",
+        "timestamp": datetime.utcnow().isoformat(),
+        "database": db_status,
+        "cache_size": len(analysis_cache.cache),
+        "version": "3.0.0"
+    }
+
+@app.get("/api/stats")
+def api_stats():
+    """API statistics"""
+    return {
+        "cache_entries": len(analysis_cache.cache),
+        "uptime": "running",
+        "version": "3.0.0"
+    }
 
 @app.post("/api/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), request: Request = None, db: Session = Depends(get_db)):
+    ip = get_client_ip(request)
+
+    # Rate limiting for login attempts
+    if not rate_limiter.is_allowed(f"login:{ip}", "login"):
+        retry_after = rate_limiter.get_retry_after(f"login:{ip}", "login")
+        logger.warning(f"Rate limit exceeded for login from IP: {ip}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many login attempts. Try again in {retry_after} seconds",
+            headers={"Retry-After": str(retry_after)}
+        )
+
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
+        logger.info(f"Failed login attempt for: {form_data.username} from IP: {ip}")
         raise HTTPException(401, "Invalid credentials")
-    ip = get_client_ip(request)
+
+    if not user.is_active:
+        logger.warning(f"Inactive user attempted login: {user.email}")
+        raise HTTPException(403, "Account is deactivated")
+
     user.last_login = datetime.utcnow()
     user.last_ip = ip
     user.last_geo = get_geo_location(ip)
     db.commit()
-    log_activity(db, user.id, user.email, "Login", f"User logged in", ip)
+
+    log_activity(db, user.id, user.email, "Login", "User logged in", ip)
+    logger.info(f"Successful login: {user.email} from {ip}")
+
     token = jwt.encode(
         {"sub": user.email, "exp": datetime.utcnow() + timedelta(days=7)},
         SECRET_KEY,
@@ -141,26 +290,75 @@ async def get_me(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
 class AnalyzeRequest(BaseModel):
     domain: str
     competitors: List[str] = []
-    max_pages: int = 20
+    max_pages: int = 50  # Default to 50 pages
 
 @app.post("/api/analyze")
 async def deep_analysis(request: AnalyzeRequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    ip = get_client_ip(req)
+
+    # Rate limiting for analysis requests
+    if not rate_limiter.is_allowed(f"analyze:{ip}", "analyze"):
+        retry_after = rate_limiter.get_retry_after(f"analyze:{ip}", "analyze")
+        logger.warning(f"Rate limit exceeded for analysis from IP: {ip}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many analysis requests. Try again in {retry_after} seconds",
+            headers={"Retry-After": str(retry_after)}
+        )
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         user = db.query(User).filter(User.email == payload.get("sub")).first()
-        your_data = crawl_site(request.domain, request.max_pages)
+
+        if not user:
+            raise HTTPException(401, "User not found")
+
+        # Check user quota
+        if user.quota <= 0:
+            logger.warning(f"User {user.email} exceeded quota")
+            raise HTTPException(403, "Analysis quota exceeded. Please upgrade your plan.")
+
+        # Check cache first
+        cache_key = f"analysis:{request.domain}:{request.max_pages}"
+        cached_result = analysis_cache.get(cache_key)
+
+        if cached_result:
+            logger.info(f"Cache hit for {request.domain}")
+            return {
+                "success": True,
+                "job_id": "cached",
+                "status": "completed",
+                "data": cached_result,
+                "cached": True
+            }
+
+        logger.info(f"Starting deep analysis for {request.domain} (max_pages: {request.max_pages})")
+
+        # Crawl with enhanced settings (50 pages default)
+        your_data = crawl_site(request.domain, min(request.max_pages, 50))
+
         competitors_data = {}
-        for comp in request.competitors:
-            competitors_data[comp] = crawl_site(comp, 10)
-        keyword_gaps = [
-            {"keyword": "AI marketing automation", "competitor_usage": len(request.competitors), "priority": "high", "volume": "12.5K", "difficulty": "Medium"},
-            {"keyword": "competitive intelligence tools", "competitor_usage": len(request.competitors) - 1, "priority": "high", "volume": "8.2K", "difficulty": "Low"},
-        ]
+        for comp in request.competitors[:5]:  # Limit to 5 competitors
+            logger.info(f"Analyzing competitor: {comp}")
+            competitors_data[comp] = crawl_site(comp, 15)
+
+        # Generate keyword gaps based on actual data
+        keyword_gaps = generate_keyword_gaps(your_data, competitors_data)
+
         result = {
             "your_site": your_data,
             "competitors": competitors_data,
-            "content_gaps": {"keyword_gaps": keyword_gaps}
+            "content_gaps": {"keyword_gaps": keyword_gaps},
+            "analyzed_at": datetime.utcnow().isoformat()
         }
+
+        # Cache the result for 10 minutes
+        analysis_cache.set(cache_key, result, ttl=600)
+
+        # Decrease user quota
+        user.quota -= 1
+        db.commit()
+
         report = AnalysisReport(
             user_id=user.id,
             report_type="deep_analysis",
@@ -169,16 +367,66 @@ async def deep_analysis(request: AnalyzeRequest, req: Request = None, token: str
             results=json.dumps(result)
         )
         db.add(report)
-        log_activity(db, user.id, user.email, "Deep Analysis", f"Analyzed {request.domain}", get_client_ip(req))
+        log_activity(db, user.id, user.email, "Deep Analysis", f"Analyzed {request.domain} ({your_data.get('total_pages', 0)} pages)", ip)
         db.commit()
+
+        logger.info(f"Analysis completed for {request.domain}: {your_data.get('total_pages', 0)} pages crawled")
+
         return {
             "success": True,
             "job_id": f"job_{report.id}",
             "status": "completed",
-            "data": result
+            "data": result,
+            "remaining_quota": user.quota
         }
+    except HTTPException:
+        raise
+    except JWTError:
+        logger.error("Invalid JWT token")
+        raise HTTPException(401, "Invalid token")
     except Exception as e:
+        logger.error(f"Analysis error for {request.domain}: {str(e)}")
         return {"success": False, "error": str(e)}
+
+
+def generate_keyword_gaps(your_data: Dict, competitors_data: Dict) -> List[Dict]:
+    """Generate keyword gaps based on actual crawled data"""
+    gaps = []
+
+    # Extract keywords from competitor data that are missing in your data
+    your_keywords = set()
+    if your_data.get('pages'):
+        for page in your_data['pages']:
+            if 'analysis' in page:
+                # Extract from titles and headings
+                title = page['analysis'].get('title', {}).get('text', '')
+                your_keywords.update(title.lower().split())
+                for h1 in page['analysis'].get('headers', {}).get('h1_texts', []):
+                    your_keywords.update(h1.lower().split())
+
+    comp_keywords = set()
+    for comp, data in competitors_data.items():
+        if data.get('pages'):
+            for page in data['pages']:
+                if 'analysis' in page:
+                    title = page['analysis'].get('title', {}).get('text', '')
+                    comp_keywords.update(title.lower().split())
+
+    # Find keywords competitors have but you don't
+    missing = comp_keywords - your_keywords
+    common_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'is', 'are', '-', '|', '–'}
+    missing = [kw for kw in missing if len(kw) > 3 and kw not in common_words]
+
+    for i, kw in enumerate(list(missing)[:10]):
+        gaps.append({
+            "keyword": kw,
+            "competitor_usage": len(competitors_data),
+            "priority": "high" if i < 3 else "medium",
+            "volume": "Analyzing...",
+            "difficulty": "Medium"
+        })
+
+    return gaps
 
 class AdsRequest(BaseModel):
     domain: str
