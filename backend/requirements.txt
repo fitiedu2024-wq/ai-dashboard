@@ -5,6 +5,7 @@ python-multipart==0.0.6
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-dotenv==1.1.1
+bcrypt==4.2.0
 
 # Database
 sqlalchemy==2.0.36
@@ -16,23 +17,24 @@ httpx==0.28.1
 beautifulsoup4==4.12.3
 lxml==5.3.0
 
-# Google AI (simplified - only what we need)
+# Google AI
 google-generativeai==0.8.5
 
-# Remove heavy packages we don't really use
-# google-cloud-vision (not needed)
-# google-cloud-language (not needed)
-# google-cloud-tasks (not needed)
+# Google Cloud Services
 google-cloud-vision==3.7.4
 google-cloud-language==2.13.4
 google-cloud-bigquery==3.25.0
+
+# Email & Scheduling
 sendgrid==6.11.0
 apscheduler==3.10.4
+
+# Data Processing
 pandas==2.2.3
 plotly==5.24.1
-beautifulsoup4==4.12.3
-requests==2.32.3
-lxml==5.3.0
-python-multipart==0.0.6
-requests==2.32.3
 yake==0.4.8
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1
