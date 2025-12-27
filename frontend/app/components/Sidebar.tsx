@@ -1,32 +1,34 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { 
+import {
   Home, Search, Smartphone, BarChart3, Key, Settings, Users, Activity,
-  LogOut, Zap, Eye, MessageSquare, TrendingUp, Sparkles
+  LogOut, Zap, Eye, MessageSquare, TrendingUp, Sparkles, Menu, X, Moon, Sun
 } from 'lucide-react';
+import { useAuth } from '../lib/auth-context';
+import { useToast } from '../lib/toast';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { user, isAdmin, logout } = useAuth();
+  const { success } = useToast();
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isDark, setIsDark] = useState(true);
 
+  // Close mobile menu on route change
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetch('https://ai-dashboard-backend-7dha.onrender.com/api/user', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(r => r.json())
-        .then(data => {
-          setUser(data);
-          setIsAdmin(data.is_admin);
-        })
-        .catch(() => {});
-    }
+    setIsMobileOpen(false);
+  }, [pathname]);
+
+  // Close on escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMobileOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
   }, []);
 
   const mainLinks = [
@@ -38,7 +40,7 @@ export default function Sidebar() {
   ];
 
   const aiLinks = [
-    { href: '/ai-recommendations', label: 'AI Recommendations', icon: Sparkles },
+    { href: '/ai-recommendations', label: 'AI Insights', icon: Sparkles },
     { href: '/analytics', label: 'Analytics', icon: TrendingUp },
     { href: '/vision-ai', label: 'Vision AI', icon: Eye },
     { href: '/sentiment', label: 'Sentiment', icon: MessageSquare },
@@ -50,21 +52,27 @@ export default function Sidebar() {
     { href: '/admin/activity', label: 'Activity', icon: Activity },
   ];
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    router.push('/login');
+  const handleLogout = () => {
+    success('Goodbye!', 'You have been logged out');
+    setTimeout(() => logout(), 500);
   };
 
-  const NavLink = ({ href, label, icon: Icon }: any) => {
+  const toggleTheme = () => {
+    setIsDark(!isDark);
+    // Future: Implement actual theme switching
+  };
+
+  const NavLink = ({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) => {
     const isActive = pathname === href;
     return (
       <Link
         href={href}
         className={`group flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all ${
           isActive
-            ? 'bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg'
-            : 'text-gray-300 hover:bg-gray-800/50'
+            ? 'bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg shadow-purple-500/25'
+            : 'text-gray-300 hover:bg-white/5 hover:text-white'
         }`}
+        onClick={() => setIsMobileOpen(false)}
       >
         <Icon className="w-5 h-5" />
         <span className="font-medium">{label}</span>
@@ -72,55 +80,134 @@ export default function Sidebar() {
     );
   };
 
-  return (
-    <div className="w-80 min-h-screen bg-gradient-to-br from-gray-900 via-gray-850 to-gray-900 text-white p-6 flex flex-col border-r border-gray-800">
+  const SidebarContent = () => (
+    <>
+      {/* Logo */}
       <div className="mb-10">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-2xl font-bold">G</div>
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-2xl font-bold shadow-lg">
+            G
+          </div>
           <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">AI Grinners</h1>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              AI Grinners
+            </h1>
             <p className="text-xs text-gray-400">Marketing Intelligence</p>
           </div>
         </div>
       </div>
-      
-      <nav className="space-y-1 mb-8">
+
+      {/* Main Navigation */}
+      <nav className="space-y-1 mb-6">
         {mainLinks.map((link) => <NavLink key={link.href} {...link} />)}
       </nav>
 
-      <div className="border-t border-gray-800 my-6"></div>
-      
-      <div className="space-y-1 mb-8">
+      <div className="border-t border-white/10 my-6"></div>
+
+      {/* AI Tools */}
+      <div className="space-y-1 mb-6">
         <div className="text-xs text-gray-500 uppercase tracking-wider mb-3 px-4 flex items-center gap-2">
           <Zap className="w-3 h-3" />AI Tools
         </div>
         {aiLinks.map((link) => <NavLink key={link.href} {...link} />)}
       </div>
 
+      {/* Admin Section */}
       {isAdmin && (
         <>
-          <div className="border-t border-gray-800 my-6"></div>
-          <div className="space-y-1 mb-8">
+          <div className="border-t border-white/10 my-6"></div>
+          <div className="space-y-1 mb-6">
             <div className="text-xs text-gray-500 uppercase tracking-wider mb-3 px-4">Admin</div>
             {adminLinks.map((link) => <NavLink key={link.href} {...link} />)}
           </div>
         </>
       )}
 
-      <div className="mt-auto border-t border-gray-800 pt-6 space-y-4">
-        <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+      {/* Footer */}
+      <div className="mt-auto border-t border-white/10 pt-6 space-y-4">
+        {/* User Info */}
+        {user && (
+          <div className="px-4 py-2 text-sm text-gray-400">
+            <p className="truncate font-medium text-white">{user.email}</p>
+            <p className="text-xs">{isAdmin ? 'Administrator' : 'User'}</p>
+          </div>
+        )}
+
+        {/* Quota */}
+        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
           <div className="text-sm text-gray-400 mb-2 flex items-center justify-between">
-            <span>Quota</span>
-            <span className="text-white font-bold">{user?.quota || 15}/20</span>
+            <span>Analysis Quota</span>
+            <span className="text-white font-bold">{user?.quota || 0}</span>
           </div>
           <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all" style={{width: `${((user?.quota || 15)/20)*100}%`}}></div>
+            <div
+              className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
+              style={{width: `${Math.min(((user?.quota || 0) / 20) * 100, 100)}%`}}
+            />
           </div>
         </div>
-        <button onClick={logout} className="w-full px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all flex items-center justify-center gap-2">
-          <LogOut className="w-4 h-4" />Logout
+
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="w-full px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all flex items-center justify-center gap-2 text-gray-400 hover:text-white"
+        >
+          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+        </button>
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          className="w-full px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all flex items-center justify-center gap-2"
+        >
+          <LogOut className="w-4 h-4" />
+          Logout
         </button>
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setIsMobileOpen(true)}
+        className="lg:hidden fixed top-4 left-4 z-50 p-3 bg-gray-900/90 backdrop-blur-xl rounded-xl border border-white/10 text-white"
+        aria-label="Open menu"
+      >
+        <Menu className="w-6 h-6" />
+      </button>
+
+      {/* Mobile Overlay */}
+      {isMobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+      <div
+        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-80 bg-gradient-to-br from-gray-900 via-gray-850 to-gray-900 text-white p-6 flex flex-col border-r border-white/10 transform transition-transform duration-300 overflow-y-auto ${
+          isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {/* Close Button */}
+        <button
+          onClick={() => setIsMobileOpen(false)}
+          className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white"
+          aria-label="Close menu"
+        >
+          <X className="w-6 h-6" />
+        </button>
+        <SidebarContent />
+      </div>
+
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:flex w-80 min-h-screen bg-gradient-to-br from-gray-900 via-gray-850 to-gray-900 text-white p-6 flex-col border-r border-white/10">
+        <SidebarContent />
+      </div>
+    </>
   );
 }
