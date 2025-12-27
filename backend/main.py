@@ -20,6 +20,16 @@ from models import Base, engine, SessionLocal, User, ActivityLog, AnalysisReport
 from credentials import DEFAULT_ADMIN, get_password_hash, verify_password
 from scraper import crawl_site, find_social_accounts
 
+# Local AI services (NO Google Cloud required!)
+from ai_local import LocalAnalyzer, analyze_with_local_ai
+from local_services import (
+    analyze_sentiment as local_sentiment,
+    detect_brands_in_image as local_detect_brands,
+    analyze_image_content,
+    save_analytics,
+    query_analytics as local_query_analytics
+)
+
 # ==================== LOGGING SETUP ====================
 logging.basicConfig(
     level=logging.INFO,
@@ -103,8 +113,8 @@ analysis_cache = SimpleCache()
 # ==================== APP SETUP ====================
 app = FastAPI(
     title="AI Grinners API",
-    description="Marketing Intelligence & Competitive Analysis Platform",
-    version="3.0.0"
+    description="Marketing Intelligence & Competitive Analysis Platform (100% Local - No Google Cloud Required!)",
+    version="4.0.0"
 )
 
 # CORS - Configure allowed origins from environment
@@ -164,6 +174,8 @@ def log_activity(db: Session, user_id: int, user_email: str, action: str, detail
 
 @app.on_event("startup")
 async def startup():
+    print("🚀 Starting AI Grinners API v4.0.0 (100% Local - No Google Cloud!)")
+    print("=" * 60)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     existing_admin = db.query(User).filter(User.email == DEFAULT_ADMIN["email"]).first()
@@ -180,10 +192,18 @@ async def startup():
     else:
         print(f"✅ Admin exists: {DEFAULT_ADMIN['email']}")
     db.close()
+    print("✅ Database initialized")
+    print("✅ Local AI services loaded (no external APIs required)")
+    print("=" * 60)
 
 @app.get("/")
 def root():
-    return {"message": "AI Grinners API", "status": "running", "version": "3.0.0"}
+    return {
+        "message": "AI Grinners API",
+        "status": "running",
+        "version": "4.0.0",
+        "mode": "100% Local - No Google Cloud Required"
+    }
 
 @app.get("/health")
 def health_check():
@@ -203,7 +223,8 @@ def health_check():
         "timestamp": datetime.utcnow().isoformat(),
         "database": db_status,
         "cache_size": len(analysis_cache.cache),
-        "version": "3.0.0"
+        "version": "4.0.0",
+        "mode": "local"
     }
 
 @app.get("/api/stats")
@@ -212,7 +233,9 @@ def api_stats():
     return {
         "cache_entries": len(analysis_cache.cache),
         "uptime": "running",
-        "version": "3.0.0"
+        "version": "4.0.0",
+        "google_cloud": False,
+        "mode": "100% Local"
     }
 
 @app.post("/api/token")
@@ -524,6 +547,69 @@ async def seo_comparison(request: SEORequest, req: Request = None, token: str = 
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+class AIRecommendationsRequest(BaseModel):
+    domain: str
+    competitors: List[str] = []
+
+@app.post("/api/ai-recommendations")
+async def ai_recommendations(request: AIRecommendationsRequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Get AI-powered marketing recommendations using local analysis (NO Google Cloud!)"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user = db.query(User).filter(User.email == payload.get("sub")).first()
+
+        if not user:
+            raise HTTPException(401, "User not found")
+
+        logger.info(f"Generating AI recommendations for {request.domain}")
+
+        # Crawl your site
+        your_data = crawl_site(request.domain, 15)
+
+        # Crawl competitors
+        competitor_data = []
+        for comp in request.competitors[:3]:
+            comp_crawl = crawl_site(comp, 10)
+            comp_crawl['domain'] = comp
+            competitor_data.append(comp_crawl)
+
+        # Get AI analysis using local analyzer
+        analyzer = LocalAnalyzer()
+        competitive_analysis = analyzer.deep_competitor_analysis(your_data, competitor_data)
+        content_strategy = analyzer.generate_content_strategy(your_data)
+
+        # Save analytics
+        save_analytics({
+            "domain": request.domain,
+            "type": "ai_recommendations",
+            "user_id": user.id,
+            "results": {
+                "competitive_analysis": competitive_analysis,
+                "content_strategy": content_strategy
+            }
+        })
+
+        if user:
+            log_activity(db, user.id, user.email, "AI Recommendations", f"Generated for {request.domain}", get_client_ip(req))
+
+        return {
+            "success": True,
+            "data": {
+                "competitive_analysis": competitive_analysis,
+                "content_strategy": content_strategy,
+                "generated_at": datetime.utcnow().isoformat(),
+                "method": "local_ai"
+            }
+        }
+    except HTTPException:
+        raise
+    except JWTError:
+        raise HTTPException(401, "Invalid token")
+    except Exception as e:
+        logger.error(f"AI recommendations error: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
 class KeywordRequest(BaseModel):
     domain: str
 
@@ -585,39 +671,46 @@ class ImageRequest(BaseModel):
 
 @app.post("/api/vision/detect-brands")
 async def detect_brands(request: ImageRequest, token: str = Depends(oauth2_scheme)):
-    return {
-        "success": True,
-        "data": {
-            "logos": [{"name": "Sample Brand", "confidence": 95.5}],
-            "web_entities": [{"name": "Technology", "score": 85}],
-            "labels": [{"name": "Product", "confidence": 92}]
+    """Detect brands and logos in an image using local analysis"""
+    result = local_detect_brands(request.image_url)
+
+    if result.get("success"):
+        return {
+            "success": True,
+            "data": result.get("data", {})
         }
-    }
+    else:
+        return {
+            "success": False,
+            "error": result.get("error", "Brand detection failed")
+        }
+
+
+@app.post("/api/vision/analyze")
+async def analyze_image(request: ImageRequest, token: str = Depends(oauth2_scheme)):
+    """Comprehensive image analysis using local processing"""
+    result = analyze_image_content(request.image_url)
+    return result
 
 class SentimentRequest(BaseModel):
     text: str
 
 @app.post("/api/language/sentiment")
 async def sentiment_analysis(request: SentimentRequest, token: str = Depends(oauth2_scheme)):
-    positive_words = ['good', 'great', 'excellent', 'amazing']
-    negative_words = ['bad', 'poor', 'terrible', 'awful']
-    text_lower = request.text.lower()
-    pos_count = sum(1 for word in positive_words if word in text_lower)
-    neg_count = sum(1 for word in negative_words if word in text_lower)
-    if pos_count > neg_count:
-        sentiment_label = "Positive"
-        score = 0.7
-    elif neg_count > pos_count:
-        sentiment_label = "Negative"
-        score = -0.7
+    """Analyze text sentiment using local NLP (TextBlob)"""
+    result = local_sentiment(request.text)
+
+    if result.get("success"):
+        return {
+            "success": True,
+            "sentiment": result.get("sentiment"),
+            "entities": result.get("entities", [])
+        }
     else:
-        sentiment_label = "Neutral"
-        score = 0.0
-    return {
-        "success": True,
-        "sentiment": {"score": round(score, 3), "magnitude": abs(score), "label": sentiment_label},
-        "entities": [{"name": "Product", "type": "CONSUMER_GOOD", "salience": 0.8}]
-    }
+        return {
+            "success": False,
+            "error": result.get("error", "Sentiment analysis failed")
+        }
 
 def verify_admin(token: str, db: Session):
     try:
