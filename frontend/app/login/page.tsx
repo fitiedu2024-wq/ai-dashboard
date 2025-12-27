@@ -2,39 +2,56 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, Loader2 } from 'lucide-react';
+import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { authAPI } from '../lib/api';
+import { useToast } from '../lib/toast';
 
 export default function Login() {
   const router = useRouter();
+  const { success, error: showError } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const validateForm = (): boolean => {
+    if (!email) {
+      setError('Email is required');
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Please enter a valid email');
+      return false;
+    }
+    if (!password) {
+      setError('Password is required');
+      return false;
+    }
+    if (password.length < 4) {
+      setError('Password must be at least 4 characters');
+      return false;
+    }
+    return true;
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
+    if (!validateForm()) return;
+
     setLoading(true);
 
-    try {
-      const formData = new URLSearchParams();
-      formData.append('username', email);
-      formData.append('password', password);
+    const { data, error: apiError } = await authAPI.login(email, password);
 
-      const response = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('token', data.access_token);
-        router.push('/dashboard');
-      } else {
-        alert('Invalid credentials');
-      }
-    } catch (error) {
-      alert('Login failed');
+    if (apiError) {
+      setError(apiError);
+      showError('Login Failed', apiError);
+    } else if (data?.access_token) {
+      success('Welcome Back!', 'Redirecting to dashboard...');
+      setTimeout(() => router.push('/dashboard'), 500);
     }
+
     setLoading(false);
   };
 
@@ -44,7 +61,7 @@ export default function Login() {
       <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-gray-900 to-pink-900">
         {/* Floating particles */}
         <div className="absolute inset-0">
-          {[...Array(100)].map((_, i) => (
+          {[...Array(50)].map((_, i) => (
             <div
               key={i}
               className="absolute rounded-full"
@@ -72,11 +89,9 @@ export default function Login() {
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <div className="relative animate-float">
-              <img 
-                src="https://image2url.com/images/1759984925499-cddfdfef-f863-48f3-8049-17d9ec29e066.png"
-                alt="AI Grinners Logo"
-                className="w-32 h-32 object-contain drop-shadow-2xl"
-              />
+              <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-4xl font-bold shadow-2xl">
+                G
+              </div>
             </div>
           </div>
 
@@ -84,6 +99,14 @@ export default function Login() {
             Welcome Back
           </h1>
           <p className="text-center text-gray-300 mb-8">AI Grinners Marketing Intelligence</p>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 text-red-400">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
@@ -93,10 +116,11 @@ export default function Login() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => { setEmail(e.target.value); setError(''); }}
                   placeholder="your@email.com"
                   className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400/20 transition-all"
                   required
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -108,10 +132,11 @@ export default function Login() {
                 <input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
                   placeholder="••••••••"
                   className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400/20 transition-all"
                   required
+                  autoComplete="current-password"
                 />
               </div>
             </div>
@@ -131,6 +156,11 @@ export default function Login() {
               )}
             </button>
           </form>
+
+          {/* Footer */}
+          <p className="text-center text-gray-500 text-xs mt-6">
+            Protected by AI Grinners Security
+          </p>
         </div>
       </div>
 
