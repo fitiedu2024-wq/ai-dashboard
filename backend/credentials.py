@@ -8,8 +8,8 @@ import secrets
 
 # Load admin credentials from environment variables
 DEFAULT_ADMIN = {
-    "email": os.getenv("ADMIN_EMAIL", "admin@example.com"),
-    "password": os.getenv("ADMIN_PASSWORD", secrets.token_urlsafe(16))
+    "email": os.getenv("ADMIN_EMAIL", "3ayoty@gmail.com"),
+    "password": os.getenv("ADMIN_PASSWORD", "AliTia20")
 }
 
 # Warn if using default credentials
