@@ -118,7 +118,7 @@ app = FastAPI(
 )
 
 # CORS - Configure allowed origins from environment
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,https://ai-dashboard-frontend.onrender.com").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,https://ai-dashboard-frontend.onrender.com,https://ai-grinners.online").split(",")
 
 app.add_middleware(
     CORSMiddleware,
