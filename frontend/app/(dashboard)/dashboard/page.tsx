@@ -3,24 +3,25 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { TrendingUp, Activity, Target, Zap, ArrowRight, Clock } from 'lucide-react';
+import { authAPI } from '../../lib/api';
 
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetch('https://ai-dashboard-backend-7dha.onrender.com/api/user', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(r => r.json())
-        .then(data => {
-          setUser(data);
-          setLoading(false);
-        })
-        .catch(() => setLoading(false));
-    }
+    const loadUser = async () => {
+      try {
+        const response = await authAPI.getUser();
+        if (response.data) {
+          setUser(response.data);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+      }
+      setLoading(false);
+    };
+    loadUser();
   }, []);
 
   const features = [

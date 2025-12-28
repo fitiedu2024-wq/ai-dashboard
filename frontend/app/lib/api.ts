@@ -250,6 +250,14 @@ export const adminAPI = {
   },
 };
 
+// ==================== ANALYTICS API ====================
+
+export const analyticsAPI = {
+  async getDashboard(): Promise<APIResponse<{ daily: any[] }>> {
+    return request<{ daily: any[] }>('/api/analytics/dashboard');
+  },
+};
+
 // ==================== HEALTH API ====================
 
 export const healthAPI = {
@@ -275,6 +283,7 @@ export const healthAPI = {
 const api = {
   auth: authAPI,
   analysis: analysisAPI,
+  analytics: analyticsAPI,
   admin: adminAPI,
   health: healthAPI,
   getToken,

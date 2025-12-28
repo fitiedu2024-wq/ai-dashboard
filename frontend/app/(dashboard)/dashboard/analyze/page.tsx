@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Search, Loader2, CheckCircle, TrendingUp, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { analysisAPI } from '../../../lib/api';
+import { useToast } from '../../../lib/toast';
 
 export default function DeepAnalyze() {
   const [domain, setDomain] = useState('');
@@ -10,32 +12,26 @@ export default function DeepAnalyze() {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
   const [expandedPages, setExpandedPages] = useState<Set<number>>(new Set());
+  const { error: showError } = useToast();
 
   const startAnalysis = async () => {
     setLoading(true);
     setProgress(0);
     setResult(null);
-    
+
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          domain,
-          competitors: competitors.split(',').map(c => c.trim()).filter(c => c),
-          max_pages: 20
-        })
-      });
-      
-      const data = await response.json();
-      setResult(data);
+      const competitorsList = competitors.split(',').map(c => c.trim()).filter(c => c);
+      const response = await analysisAPI.deepAnalysis(domain, competitorsList, 50);
+
+      if (response.error) {
+        showError('Error', response.error);
+      } else {
+        setResult(response);
+      }
       setProgress(100);
     } catch (error) {
       console.error('Error:', error);
+      showError('Error', 'Failed to analyze domain');
     }
     setLoading(false);
   };

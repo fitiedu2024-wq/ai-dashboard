@@ -3,34 +3,29 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Settings, Users, Activity, ArrowLeft, LogOut } from 'lucide-react';
+import { authAPI } from '../lib/api';
+import { useToast } from '../lib/toast';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const { error: showError } = useToast();
 
   useEffect(() => {
     checkAuth();
   }, []);
 
   const checkAuth = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
     try {
-      const response = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/user', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) {
+      const response = await authAPI.getUser();
+      if (response.error) {
         router.push('/login');
         return;
       }
-      const user = await response.json();
-      if (!user.is_admin) {
-        alert('Admin access required');
+      if (!response.data?.is_admin) {
+        showError('Access Denied', 'Admin access required');
         router.push('/dashboard');
         return;
       }

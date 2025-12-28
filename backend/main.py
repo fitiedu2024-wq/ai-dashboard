@@ -128,12 +128,24 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-# Security
+# Security - SECRET_KEY Management
 SECRET_KEY = os.getenv("SECRET_KEY")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
 if not SECRET_KEY:
-    logger.warning("⚠️  SECRET_KEY not set! Using random key (sessions won't persist across restarts)")
-    import secrets
-    SECRET_KEY = secrets.token_urlsafe(32)
+    if ENVIRONMENT == "production":
+        # In production, SECRET_KEY is REQUIRED
+        logger.error("🚨 CRITICAL: SECRET_KEY not set in production! Server cannot start safely.")
+        raise RuntimeError("SECRET_KEY environment variable is required in production!")
+    else:
+        # In development, generate a stable key based on machine identifier
+        import hashlib
+        import platform
+        # Create a stable key from machine characteristics (won't change on restart)
+        machine_id = f"{platform.node()}-{os.getcwd()}-ai-grinners-dev"
+        SECRET_KEY = hashlib.sha256(machine_id.encode()).hexdigest()
+        logger.warning(f"⚠️  Development mode: Using auto-generated SECRET_KEY (set SECRET_KEY env var for production)")
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
 def get_db():
