@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Activity, Target, Info } from 'lucide-react';
+import { analyticsAPI } from '../../lib/api';
 
 export default function Analytics() {
   const [data, setData] = useState<any>(null);
@@ -12,13 +13,11 @@ export default function Analytics() {
   }, []);
 
   const loadData = async () => {
-    const token = localStorage.getItem('token');
     try {
-      const res = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/analytics/dashboard', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const result = await res.json();
-      setData(result.data);
+      const response = await analyticsAPI.getDashboard();
+      if (response.data) {
+        setData(response.data);
+      }
     } catch (error) {
       console.error('Error:', error);
     }

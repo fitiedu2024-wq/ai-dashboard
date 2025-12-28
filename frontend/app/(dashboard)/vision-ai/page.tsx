@@ -2,28 +2,27 @@
 
 import { useState } from 'react';
 import { Eye, Upload, Loader2, Info } from 'lucide-react';
+import { analysisAPI } from '../../lib/api';
+import { useToast } from '../../lib/toast';
 
 export default function VisionAI() {
   const [imageUrl, setImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const { error: showError } = useToast();
 
   const analyzeImage = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/vision/detect-brands', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ image_url: imageUrl })
-      });
-      const data = await response.json();
-      setResults(data);
+      const response = await analysisAPI.visionAI(imageUrl);
+      if (response.error) {
+        showError('Error', response.error);
+      } else {
+        setResults(response.data);
+      }
     } catch (error) {
       console.error('Error:', error);
+      showError('Error', 'Failed to analyze image');
     }
     setLoading(false);
   };

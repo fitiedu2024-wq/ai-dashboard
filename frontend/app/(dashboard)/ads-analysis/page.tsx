@@ -2,29 +2,28 @@
 
 import { useState } from 'react';
 import { Search, Loader2, ExternalLink } from 'lucide-react';
+import { analysisAPI } from '../../lib/api';
+import { useToast } from '../../lib/toast';
 
 export default function AdsAnalysis() {
   const [domain, setDomain] = useState('');
   const [brandName, setBrandName] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const { error: showError } = useToast();
 
   const analyze = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/analyze-ads', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ domain, brand_name: brandName })
-      });
-      const data = await response.json();
-      setResults(data);
+      const response = await analysisAPI.adsAnalysis(domain, brandName || undefined);
+      if (response.error) {
+        showError('Error', response.error);
+      } else {
+        setResults(response.data);
+      }
     } catch (error) {
       console.error('Error:', error);
+      showError('Error', 'Failed to analyze ads');
     }
     setLoading(false);
   };
@@ -36,23 +35,23 @@ export default function AdsAnalysis() {
           Ads Intelligence
         </h1>
         <p className="text-gray-200 text-lg mb-8">Discover competitor ads across all platforms</p>
-        
+
         <div className="glass rounded-2xl p-8 mb-8 border border-white/20">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
-              <label className="block text-sm font-bold mb-3 text-pink-300">🌐 Domain</label>
+              <label className="block text-sm font-bold mb-3 text-pink-300">Domain</label>
               <input
                 type="text"
                 value={domain}
                 onChange={(e) => setDomain(e.target.value)}
-                placeholder="fitiedu.com"
+                placeholder="example.com"
                 className="w-full p-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:border-pink-400 focus:outline-none"
                 disabled={loading}
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-bold mb-3 text-pink-300">✨ Brand Name (optional)</label>
+              <label className="block text-sm font-bold mb-3 text-pink-300">Brand Name (optional)</label>
               <input
                 type="text"
                 value={brandName}
@@ -63,11 +62,11 @@ export default function AdsAnalysis() {
               />
             </div>
           </div>
-          
+
           <button
             onClick={analyze}
             disabled={loading || !domain}
-            className="w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 disabled:opacity-50"
+            className="w-full bg-gradient-to-r from-pink-600 to-purple-600 text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 disabled:opacity-50 hover:shadow-lg transition-all"
           >
             {loading ? <><Loader2 className="w-5 h-5 animate-spin" />Discovering Ads...</> : <><Search className="w-5 h-5" />Discover Ads</>}
           </button>
@@ -85,11 +84,6 @@ export default function AdsAnalysis() {
                   <h3 className="text-2xl font-bold text-white">Meta (Facebook/Instagram)</h3>
                   <p className="text-sm text-gray-400">Official Ad Library</p>
                 </div>
-              </div>
-              
-              <div className="bg-blue-500/10 p-6 rounded-xl mb-4">
-                <div className="text-4xl font-bold text-blue-400 mb-2">Ads Found</div>
-                <div className="text-gray-300 mb-4">View all active ads from this advertiser</div>
               </div>
 
               <a
