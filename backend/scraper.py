@@ -322,7 +322,7 @@ def crawl_site(domain: str, max_pages: int = 50) -> Dict:
                 'mobile_coverage': mobile_coverage,
                 'og_coverage': og_coverage,
                 'trackers': all_trackers,
-                'pages': pages_data[:20],  # Return top 20 pages
+                'pages': pages_data,  # Return all crawled pages
                 'issues': issues,
                 'recommendations': recommendations
             }
