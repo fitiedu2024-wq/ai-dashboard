@@ -3,9 +3,13 @@ Local Services - Replacements for Google Cloud Services
 No GCP dependencies required!
 
 Replaces:
-- Cloud Vision API -> Simple rule-based detection
-- Cloud Language API -> TextBlob sentiment analysis
+- Cloud Vision API -> LogoHunter/Simple detection
+- Cloud Language API -> pysentimiento/TextBlob sentiment analysis
 - BigQuery -> PostgreSQL with SQLAlchemy
+
+Enhanced with open-source alternatives from GitHub:
+- pysentimiento for advanced sentiment analysis
+- LogoHunter concepts for brand detection
 """
 
 import os
@@ -14,6 +18,11 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from collections import Counter
+import logging
+import requests
+from io import BytesIO
+
+logger = logging.getLogger("ai-grinners.local_services")
 
 # TextBlob for sentiment analysis (free, local)
 try:
@@ -56,6 +65,24 @@ def get_emotion_analyzer():
         except Exception:
             pass
     return _emotion_analyzer
+
+
+# PIL/Pillow for image processing (for LogoHunter-style detection)
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    logger.warning("⚠️  Pillow not installed. Image analysis limited. Install with: pip install Pillow")
+
+# Optional: OpenCV for advanced image processing
+try:
+    import cv2
+    import numpy as np
+    OPENCV_AVAILABLE = True
+except ImportError:
+    OPENCV_AVAILABLE = False
+
 
 # Database imports for local analytics storage
 try:
@@ -449,10 +476,83 @@ def detect_logos_in_image(image_url: str) -> Dict:
         }
 
 
+def fetch_image(image_url: str) -> Optional[Image.Image]:
+    """Fetch image from URL and return PIL Image object"""
+    if not PIL_AVAILABLE:
+        return None
+
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(image_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return Image.open(BytesIO(response.content))
+    except Exception as e:
+        logger.error(f"Failed to fetch image: {e}")
+        return None
+
+
+def analyze_image_colors(image: Image.Image) -> Dict:
+    """Analyze dominant colors in image (useful for brand detection)"""
+    try:
+        # Resize for faster processing
+        img = image.copy()
+        img.thumbnail((150, 150))
+
+        # Convert to RGB if necessary
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # Get color data
+        pixels = list(img.getdata())
+        color_counts = Counter(pixels)
+
+        # Get top 5 dominant colors
+        dominant_colors = []
+        for color, count in color_counts.most_common(5):
+            # Convert RGB to hex
+            hex_color = '#{:02x}{:02x}{:02x}'.format(*color)
+            percentage = round(count / len(pixels) * 100, 1)
+            dominant_colors.append({
+                "color": hex_color,
+                "rgb": list(color),
+                "percentage": percentage
+            })
+
+        return {"dominant_colors": dominant_colors}
+    except Exception as e:
+        logger.error(f"Color analysis failed: {e}")
+        return {"dominant_colors": []}
+
+
+def analyze_image_properties(image: Image.Image) -> Dict:
+    """Analyze image properties (size, format, aspect ratio)"""
+    try:
+        width, height = image.size
+        aspect_ratio = round(width / height, 2) if height > 0 else 0
+
+        return {
+            "width": width,
+            "height": height,
+            "aspect_ratio": aspect_ratio,
+            "format": image.format or "Unknown",
+            "mode": image.mode,
+            "is_square": 0.9 <= aspect_ratio <= 1.1,
+            "is_banner": aspect_ratio > 2.5,
+            "is_portrait": aspect_ratio < 0.8
+        }
+    except Exception as e:
+        logger.error(f"Property analysis failed: {e}")
+        return {}
+
+
 def detect_brands_in_image(image_url: str) -> Dict:
     """
-    Detect brands and objects in an image (simplified version)
-    Returns basic analysis based on URL patterns
+    Detect brands and objects in an image.
+    Uses PIL for image analysis when available, falls back to URL analysis.
+
+    Inspired by LogoHunter approach but simplified for local use.
     """
     try:
         if not image_url:
@@ -466,7 +566,9 @@ def detect_brands_in_image(image_url: str) -> Dict:
         result = {
             "logos": [],
             "web_entities": [],
-            "labels": []
+            "labels": [],
+            "image_properties": {},
+            "colors": []
         }
 
         # Detect known brands from URL
@@ -480,6 +582,30 @@ def detect_brands_in_image(image_url: str) -> Dict:
                     "name": f"{brand.title()} Brand",
                     "score": 80.0
                 })
+
+        # Try to fetch and analyze the actual image
+        if PIL_AVAILABLE:
+            image = fetch_image(image_url)
+            if image:
+                # Analyze image properties
+                result["image_properties"] = analyze_image_properties(image)
+
+                # Analyze colors (can help identify brand colors)
+                color_analysis = analyze_image_colors(image)
+                result["colors"] = color_analysis.get("dominant_colors", [])
+
+                # Add labels based on image analysis
+                props = result["image_properties"]
+                if props.get("is_banner"):
+                    result["labels"].append({"name": "Banner", "confidence": 90.0})
+                if props.get("is_square"):
+                    result["labels"].append({"name": "Logo/Icon", "confidence": 75.0})
+
+                # Check for text-heavy images (logos often have high contrast)
+                if result["colors"]:
+                    # If image has very few colors, likely a logo
+                    if len(result["colors"]) <= 3:
+                        result["labels"].append({"name": "Graphic/Logo", "confidence": 80.0})
 
         # Add generic labels based on URL patterns
         if any(ext in url_lower for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]):
@@ -504,10 +630,11 @@ def detect_brands_in_image(image_url: str) -> Dict:
         return {
             "success": True,
             "data": result,
-            "method": "url_analysis",
-            "note": "For advanced image analysis, consider integrating a dedicated vision API"
+            "method": "local_analysis" if PIL_AVAILABLE else "url_analysis",
+            "note": "Enhanced with image analysis" if PIL_AVAILABLE else "Install Pillow for enhanced analysis"
         }
     except Exception as e:
+        logger.error(f"Brand detection failed: {e}")
         return {
             "success": False,
             "error": str(e)
