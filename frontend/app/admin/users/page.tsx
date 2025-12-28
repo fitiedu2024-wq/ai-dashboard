@@ -2,71 +2,104 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, Mail, Calendar, Plus, Edit, Trash2, Shield } from 'lucide-react';
+import { Users, Mail, Plus, Edit, Trash2, Shield, Check, X } from 'lucide-react';
+import { adminAPI, authAPI } from '../../lib/api';
+import { useToast } from '../../lib/toast';
+
+interface User {
+  id: number;
+  email: string;
+  quota: number;
+  is_active: boolean;
+  role: string;
+  last_login: string | null;
+  last_ip: string | null;
+  last_geo: string | null;
+  created_at: string | null;
+}
 
 export default function AdminUsers() {
   const router = useRouter();
-  const [users, setUsers] = useState<any[]>([]);
+  const { success, error: showError } = useToast();
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [editUser, setEditUser] = useState<any>(null);
+  const [editUser, setEditUser] = useState<User | null>(null);
 
   useEffect(() => {
-    loadUsers();
+    checkAdminAndLoad();
   }, []);
 
-  const loadUsers = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+  const checkAdminAndLoad = async () => {
+    const userResponse = await authAPI.getUser();
+
+    if (userResponse.error) {
       router.push('/login');
       return;
     }
 
-    try {
-      const res = await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/admin/users', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setUsers(data.users || []);
-    } catch (error) {
-      console.error('Error:', error);
+    if (!userResponse.data?.is_admin) {
+      showError('Access Denied', 'Admin access required');
+      router.push('/dashboard');
+      return;
     }
+
+    loadUsers();
+  };
+
+  const loadUsers = async () => {
+    const response = await adminAPI.getUsers();
+    if (response.data) {
+      setUsers(response.data.users || []);
+    }
+    setLoading(false);
   };
 
   const createUser = async (email: string, password: string, quota: number) => {
-    const token = localStorage.getItem('token');
-    try {
-      await fetch('https://ai-dashboard-backend-7dha.onrender.com/api/admin/users/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ email, password, quota })
-      });
+    const response = await adminAPI.createUser(email, password, quota);
+    if (response.data?.success) {
+      success('User Created', `User ${email} has been created`);
       loadUsers();
       setShowCreate(false);
-    } catch (error) {
-      alert('Failed to create user');
+    } else {
+      showError('Error', response.error || 'Failed to create user');
     }
   };
 
-  const updateUser = async (userId: number, updates: any) => {
-    const token = localStorage.getItem('token');
-    try {
-      await fetch(`https://ai-dashboard-backend-7dha.onrender.com/api/admin/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updates)
-      });
+  const updateUser = async (userId: number, updates: { quota?: number; is_active?: boolean; password?: string }) => {
+    const response = await adminAPI.updateUser(userId, updates);
+    if (response.data?.success) {
+      success('User Updated', 'User has been updated successfully');
       loadUsers();
       setEditUser(null);
-    } catch (error) {
-      alert('Failed to update user');
+    } else {
+      showError('Error', response.error || 'Failed to update user');
     }
   };
+
+  const deleteUser = async (userId: number, email: string) => {
+    if (!confirm(`Are you sure you want to delete ${email}?`)) return;
+
+    const response = await adminAPI.deleteUser(userId);
+    if (response.data?.success) {
+      success('User Deleted', `User ${email} has been deleted`);
+      loadUsers();
+    } else {
+      showError('Error', response.error || 'Failed to delete user');
+    }
+  };
+
+  const toggleUserStatus = async (user: User) => {
+    await updateUser(user.id, { is_active: !user.is_active });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 min-h-screen">
@@ -76,7 +109,7 @@ export default function AdminUsers() {
             <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
               User Management
             </h1>
-            <p className="text-gray-200 text-lg">Manage all platform users</p>
+            <p className="text-gray-200 text-lg">{users.length} users registered</p>
           </div>
           <button
             onClick={() => setShowCreate(true)}
@@ -106,14 +139,14 @@ export default function AdminUsers() {
                     name="email"
                     type="email"
                     placeholder="Email"
-                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white"
+                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400"
                     required
                   />
                   <input
                     name="password"
                     type="password"
                     placeholder="Password"
-                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white"
+                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400"
                     required
                   />
                   <input
@@ -121,15 +154,15 @@ export default function AdminUsers() {
                     type="number"
                     placeholder="Quota"
                     defaultValue="15"
-                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white"
+                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400"
                     required
                   />
                 </div>
                 <div className="flex gap-3 mt-6">
-                  <button type="submit" className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold">
+                  <button type="submit" className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors">
                     Create
                   </button>
-                  <button type="button" onClick={() => setShowCreate(false)} className="flex-1 py-3 bg-gray-600 text-white rounded-xl font-bold">
+                  <button type="button" onClick={() => setShowCreate(false)} className="flex-1 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-bold transition-colors">
                     Cancel
                   </button>
                 </div>
@@ -148,21 +181,39 @@ export default function AdminUsers() {
                     <div className="flex items-center gap-3 mb-2">
                       <Mail className="w-4 h-4 text-gray-400" />
                       <span className="font-bold text-lg text-white">{user.email}</span>
-                      {user.role === 'admin' && <Shield className="w-4 h-4 text-yellow-400" />}
+                      {user.role === 'admin' && <Shield className="w-4 h-4 text-yellow-400" title="Admin" />}
+                      {!user.is_active && <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full">Inactive</span>}
                     </div>
                     <div className="flex items-center gap-6 text-sm text-gray-400">
-                      <div>Quota: <span className="text-white font-bold">{user.quota}/20</span></div>
+                      <div>Quota: <span className="text-white font-bold">{user.quota}</span></div>
                       <div>Last Login: {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</div>
                       {user.last_geo && <div>📍 {user.last_geo}</div>}
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <button
+                      onClick={() => toggleUserStatus(user)}
+                      className={`p-2 rounded-lg transition-colors ${user.is_active ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'}`}
+                      title={user.is_active ? 'Deactivate' : 'Activate'}
+                    >
+                      {user.is_active ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                    </button>
+                    <button
                       onClick={() => setEditUser(user)}
-                      className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30"
+                      className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
+                      title="Edit"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
+                    {user.role !== 'admin' && (
+                      <button
+                        onClick={() => deleteUser(user.id, user.email)}
+                        className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -178,33 +229,38 @@ export default function AdminUsers() {
               <form onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
-                const updates: any = {};
+                const updates: { quota?: number; password?: string } = {};
                 const quota = formData.get('quota');
                 const password = formData.get('password');
                 if (quota) updates.quota = parseInt(quota as string);
-                if (password) updates.password = password;
+                if (password) updates.password = password as string;
                 updateUser(editUser.id, updates);
               }}>
                 <div className="space-y-4">
-                  <input
-                    name="quota"
-                    type="number"
-                    placeholder="New Quota"
-                    defaultValue={editUser.quota}
-                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white"
-                  />
-                  <input
-                    name="password"
-                    type="password"
-                    placeholder="New Password (optional)"
-                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white"
-                  />
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">New Quota</label>
+                    <input
+                      name="quota"
+                      type="number"
+                      defaultValue={editUser.quota}
+                      className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">New Password (leave empty to keep current)</label>
+                    <input
+                      name="password"
+                      type="password"
+                      placeholder="New password"
+                      className="w-full p-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400"
+                    />
+                  </div>
                 </div>
                 <div className="flex gap-3 mt-6">
-                  <button type="submit" className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold">
+                  <button type="submit" className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors">
                     Update
                   </button>
-                  <button type="button" onClick={() => setEditUser(null)} className="flex-1 py-3 bg-gray-600 text-white rounded-xl font-bold">
+                  <button type="button" onClick={() => setEditUser(null)} className="flex-1 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-bold transition-colors">
                     Cancel
                   </button>
                 </div>
