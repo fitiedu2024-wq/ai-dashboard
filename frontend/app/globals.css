@@ -59,3 +59,18 @@ body {
   background: linear-gradient(135deg, var(--brand-purple), var(--brand-pink));
   border-radius: 5px;
 }
+
+/* Login page animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-gradient-bg {
+  background-size: 200% auto;
+  animation: gradient 3s linear infinite;
+}
