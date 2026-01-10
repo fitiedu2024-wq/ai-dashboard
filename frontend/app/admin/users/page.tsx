@@ -5,18 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Users, Mail, Plus, Edit, Trash2, Shield, Check, X } from 'lucide-react';
 import { adminAPI, authAPI } from '../../lib/api';
 import { useToast } from '../../lib/toast';
-
-interface User {
-  id: number;
-  email: string;
-  quota: number;
-  is_active: boolean;
-  role: string;
-  last_login: string | null;
-  last_ip: string | null;
-  last_geo: string | null;
-  created_at: string | null;
-}
+import type { User } from '../../lib/types';
 
 export default function AdminUsers() {
   const router = useRouter();
