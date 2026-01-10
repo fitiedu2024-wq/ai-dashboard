@@ -8,12 +8,12 @@ export interface User {
   email: string;
   quota: number;
   is_admin: boolean;
-  role?: string;
-  is_active?: boolean;
-  last_login?: string;
-  last_ip?: string;
-  last_geo?: string;
-  created_at?: string;
+  role: string;
+  is_active: boolean;
+  last_login: string | null;
+  last_ip: string | null;
+  last_geo: string | null;
+  created_at: string | null;
 }
 
 export interface AuthResponse {
@@ -196,9 +196,9 @@ export interface ActivityLog {
   id: number;
   user_email: string;
   action: string;
-  details?: string;
-  ip_address?: string;
-  geo_location?: string;
+  details: string | null;
+  ip_address: string | null;
+  geo_location: string | null;
   created_at: string;
 }
 
