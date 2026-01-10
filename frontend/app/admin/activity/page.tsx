@@ -5,16 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Activity, Clock, MapPin, User, RefreshCw } from 'lucide-react';
 import { adminAPI, authAPI } from '../../lib/api';
 import { useToast } from '../../lib/toast';
-
-interface ActivityLog {
-  id: number;
-  user_email: string;
-  action: string;
-  details: string | null;
-  ip_address: string | null;
-  geo_location: string | null;
-  created_at: string;
-}
+import type { ActivityLog } from '../../lib/types';
 
 export default function AdminActivity() {
   const router = useRouter();

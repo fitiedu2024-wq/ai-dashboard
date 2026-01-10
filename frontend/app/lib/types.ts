@@ -196,9 +196,9 @@ export interface ActivityLog {
   id: number;
   user_email: string;
   action: string;
-  details?: string;
-  ip_address?: string;
-  geo_location?: string;
+  details: string | null;
+  ip_address: string | null;
+  geo_location: string | null;
   created_at: string;
 }
 
