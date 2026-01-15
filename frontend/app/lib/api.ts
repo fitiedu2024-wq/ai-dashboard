@@ -19,7 +19,7 @@ import {
 } from './types';
 
 // API Base URL from environment
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai-dashboard-backend-7dha.onrender.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai-dashboard-backend-527790332290.me-central1.run.app';
 
 // Token management
 export const getToken = (): string | null => {
