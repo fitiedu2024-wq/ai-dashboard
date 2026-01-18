@@ -1,0 +1,56 @@
+steps:
+  # Build the backend container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/ai-marketing-backend:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/ai-marketing-backend:latest'
+      - '-f'
+      - 'backend/Dockerfile'
+      - 'backend'
+  
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/ai-marketing-backend:$SHORT_SHA']
+  
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/ai-marketing-backend:latest']
+  
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'ai-marketing-backend'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/ai-marketing-backend:$SHORT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--max-instances'
+      - '10'
+      - '--min-instances'
+      - '0'
+      - '--port'
+      - '8080'
+      - '--set-env-vars'
+      - 'ADMIN_EMAIL=3ayoty@grinners.ai,ADMIN_PASSWORD=AliTia20,DATABASE_URL=sqlite:///./data/marketing.db'
+
+images:
+  - 'gcr.io/$PROJECT_ID/ai-marketing-backend:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/ai-marketing-backend:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+timeout: '1200s'

@@ -5,18 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Users, Mail, Plus, Edit, Trash2, Shield, Check, X } from 'lucide-react';
 import { adminAPI, authAPI } from '../../lib/api';
 import { useToast } from '../../lib/toast';
-
-interface User {
-  id: number;
-  email: string;
-  quota: number;
-  is_active: boolean;
-  role: string;
-  last_login: string | null;
-  last_ip: string | null;
-  last_geo: string | null;
-  created_at: string | null;
-}
+import type { User } from '../../lib/types';
 
 export default function AdminUsers() {
   const router = useRouter();
@@ -181,7 +170,7 @@ export default function AdminUsers() {
                     <div className="flex items-center gap-3 mb-2">
                       <Mail className="w-4 h-4 text-gray-400" />
                       <span className="font-bold text-lg text-white">{user.email}</span>
-                      {user.role === 'admin' && <Shield className="w-4 h-4 text-yellow-400" title="Admin" />}
+                      {user.role === 'admin' && <span title="Admin"><Shield className="w-4 h-4 text-yellow-400" /></span>}
                       {!user.is_active && <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full">Inactive</span>}
                     </div>
                     <div className="flex items-center gap-6 text-sm text-gray-400">

@@ -5,10 +5,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
+from pydantic import validator, EmailStr
+from sqlalchemy import text
 import os
 import logging
 import time
-from functools import wraps
+import re
 from collections import defaultdict
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -77,9 +79,10 @@ rate_limiter = RateLimiter()
 
 # ==================== CACHING ====================
 class SimpleCache:
-    """Simple in-memory cache with TTL"""
-    def __init__(self):
+    """Simple in-memory cache with TTL and max size"""
+    def __init__(self, max_size: int = 500):
         self.cache: Dict[str, tuple] = {}  # key: (value, expiry_time)
+        self.max_size = max_size
 
     def get(self, key: str) -> Optional[Any]:
         """Get cached value if not expired"""
@@ -94,6 +97,13 @@ class SimpleCache:
 
     def set(self, key: str, value: Any, ttl: int = 300):
         """Cache value with TTL in seconds"""
+        self.cleanup()  # Clean expired entries first
+        # Enforce max size
+        if len(self.cache) >= self.max_size:
+            # Remove oldest entry
+            oldest_key = min(self.cache, key=lambda k: self.cache[k][1])
+            del self.cache[oldest_key]
+            logger.debug(f"Cache EVICT: {oldest_key} (max size reached)")
         self.cache[key] = (value, time.time() + ttl)
         logger.debug(f"Cache SET: {key} (TTL: {ttl}s)")
 
@@ -107,8 +117,10 @@ class SimpleCache:
         expired = [k for k, (v, exp) in self.cache.items() if exp < now]
         for k in expired:
             del self.cache[k]
+        if expired:
+            logger.debug(f"Cache cleanup: removed {len(expired)} expired entries")
 
-analysis_cache = SimpleCache()
+analysis_cache = SimpleCache(max_size=500)
 
 # ==================== APP SETUP ====================
 app = FastAPI(
@@ -223,7 +235,7 @@ def health_check():
     try:
         # Check database connection
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
         db_status = "healthy"
     except Exception as e:
@@ -322,10 +334,37 @@ async def get_me(token: str = Depends(oauth2_scheme), db: Session = Depends(get_
     except JWTError:
         raise HTTPException(401, "Invalid token")
 
+def validate_domain(domain: str) -> str:
+    """Validate and normalize domain format"""
+    domain = domain.strip().lower()
+    domain = domain.replace('https://', '').replace('http://', '').split('/')[0]
+    # Check valid domain format
+    domain_regex = r'^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$'
+    if not re.match(domain_regex, domain, re.IGNORECASE):
+        raise ValueError(f"Invalid domain format: {domain}")
+    return domain
+
+
 class AnalyzeRequest(BaseModel):
     domain: str
     competitors: List[str] = []
-    max_pages: int = 50  # Default to 50 pages
+    max_pages: int = 50
+
+    @validator('domain')
+    def validate_domain_format(cls, v):
+        return validate_domain(v)
+
+    @validator('max_pages')
+    def validate_max_pages(cls, v):
+        if v <= 0 or v > 100:
+            raise ValueError('max_pages must be between 1 and 100')
+        return v
+
+    @validator('competitors', each_item=True)
+    def validate_competitors(cls, v):
+        if v:
+            return validate_domain(v)
+        return v
 
 @app.post("/api/analyze")
 async def deep_analysis(request: AnalyzeRequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -499,6 +538,16 @@ class SEORequest(BaseModel):
     your_domain: str
     competitors: List[str]
 
+    @validator('your_domain')
+    def validate_domain_format(cls, v):
+        return validate_domain(v)
+
+    @validator('competitors', each_item=True)
+    def validate_competitors(cls, v):
+        if v:
+            return validate_domain(v)
+        return v
+
 @app.post("/api/seo-comparison")
 async def seo_comparison(request: SEORequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
@@ -510,12 +559,13 @@ async def seo_comparison(request: SEORequest, req: Request = None, token: str = 
             competitors_data[comp] = crawl_site(comp, 10)
         insights = []
         
-        # Calculate competitor averages
-        if competitors_data:
-            avg_comp_score = sum(c['avg_seo_score'] for c in competitors_data.values()) / len(competitors_data)
-            avg_comp_words = sum(c['avg_word_count'] for c in competitors_data.values()) / len(competitors_data)
-            avg_comp_alt = sum(c['avg_alt_coverage'] for c in competitors_data.values()) / len(competitors_data)
-            avg_comp_schema = sum(c['schema_coverage'] for c in competitors_data.values()) / len(competitors_data)
+        # Calculate competitor averages (with safe division)
+        if competitors_data and len(competitors_data) > 0:
+            comp_count = len(competitors_data)
+            avg_comp_score = sum(c.get('avg_seo_score', 0) for c in competitors_data.values()) / comp_count
+            avg_comp_words = sum(c.get('avg_word_count', 0) for c in competitors_data.values()) / comp_count
+            avg_comp_alt = sum(c.get('avg_alt_coverage', 0) for c in competitors_data.values()) / comp_count
+            avg_comp_schema = sum(c.get('schema_coverage', 0) for c in competitors_data.values()) / comp_count
             
             # SEO Score comparison
             score_diff = your_data['avg_seo_score'] - avg_comp_score
@@ -625,6 +675,10 @@ async def ai_recommendations(request: AIRecommendationsRequest, req: Request = N
 class KeywordRequest(BaseModel):
     domain: str
 
+    @validator('domain')
+    def validate_domain_format(cls, v):
+        return validate_domain(v)
+
 @app.post("/api/keyword-analysis")
 async def keyword_analysis(request: KeywordRequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
@@ -672,11 +726,31 @@ async def keyword_analysis(request: KeywordRequest, req: Request = None, token: 
             }
         }
     except Exception as e:
-        print(f"Error in keyword analysis: {str(e)}")
+        logger.error(f"Error in keyword analysis: {str(e)}")
         return {"success": False, "error": str(e)}
-        date = (datetime.utcnow() - timedelta(days=i)).date()
-        daily_data.append({"date": date.isoformat(), "total": 10 + (i % 5) * 3})
-    return {"success": True, "data": {"daily": daily_data}}
+
+
+@app.get("/api/analytics/dashboard")
+async def get_analytics_dashboard(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Get analytics dashboard data"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user = db.query(User).filter(User.email == payload.get("sub")).first()
+        if not user:
+            raise HTTPException(401, "User not found")
+
+        # Generate daily data for the last 7 days
+        daily_data = []
+        for i in range(7):
+            date = (datetime.utcnow() - timedelta(days=i)).date()
+            daily_data.append({"date": date.isoformat(), "total": 10 + (i % 5) * 3})
+
+        return {"success": True, "data": {"daily": daily_data}}
+    except JWTError:
+        raise HTTPException(401, "Invalid token")
+    except Exception as e:
+        logger.error(f"Analytics dashboard error: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 class ImageRequest(BaseModel):
     image_url: str

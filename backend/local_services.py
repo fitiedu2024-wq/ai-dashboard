@@ -3,9 +3,13 @@ Local Services - Replacements for Google Cloud Services
 No GCP dependencies required!
 
 Replaces:
-- Cloud Vision API -> Simple rule-based detection
-- Cloud Language API -> TextBlob sentiment analysis
+- Cloud Vision API -> LogoHunter/Simple detection
+- Cloud Language API -> pysentimiento/TextBlob sentiment analysis
 - BigQuery -> PostgreSQL with SQLAlchemy
+
+Enhanced with open-source alternatives from GitHub:
+- pysentimiento for advanced sentiment analysis
+- LogoHunter concepts for brand detection
 """
 
 import os
@@ -14,6 +18,11 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from collections import Counter
+import logging
+import requests
+from io import BytesIO
+
+logger = logging.getLogger("ai-grinners.local_services")
 
 # TextBlob for sentiment analysis (free, local)
 try:
@@ -22,6 +31,58 @@ try:
 except ImportError:
     TEXTBLOB_AVAILABLE = False
     print("⚠️  TextBlob not installed. Install with: pip install textblob")
+
+# PysSentimiento for advanced multilingual sentiment (optional)
+try:
+    from pysentimiento import create_analyzer
+    PYSENTIMIENTO_AVAILABLE = True
+    # Create analyzers lazily to avoid startup delays
+    _sentiment_analyzer = None
+    _emotion_analyzer = None
+except ImportError:
+    PYSENTIMIENTO_AVAILABLE = False
+    _sentiment_analyzer = None
+    _emotion_analyzer = None
+
+
+def get_sentiment_analyzer():
+    """Lazy load sentiment analyzer"""
+    global _sentiment_analyzer
+    if PYSENTIMIENTO_AVAILABLE and _sentiment_analyzer is None:
+        try:
+            _sentiment_analyzer = create_analyzer(task="sentiment", lang="en")
+        except Exception:
+            pass
+    return _sentiment_analyzer
+
+
+def get_emotion_analyzer():
+    """Lazy load emotion analyzer"""
+    global _emotion_analyzer
+    if PYSENTIMIENTO_AVAILABLE and _emotion_analyzer is None:
+        try:
+            _emotion_analyzer = create_analyzer(task="emotion", lang="en")
+        except Exception:
+            pass
+    return _emotion_analyzer
+
+
+# PIL/Pillow for image processing (for LogoHunter-style detection)
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    logger.warning("⚠️  Pillow not installed. Image analysis limited. Install with: pip install Pillow")
+
+# Optional: OpenCV for advanced image processing
+try:
+    import cv2
+    import numpy as np
+    OPENCV_AVAILABLE = True
+except ImportError:
+    OPENCV_AVAILABLE = False
+
 
 # Database imports for local analytics storage
 try:
@@ -127,7 +188,10 @@ def query_analytics(days: int = 30) -> Dict:
 # ============= Sentiment Analysis (Replaces Cloud Language API) =============
 
 def analyze_sentiment(text: str) -> Dict:
-    """Analyze sentiment using TextBlob (replaces Cloud Language API)"""
+    """
+    Analyze sentiment using pysentimiento (if available) or TextBlob.
+    pysentimiento provides advanced multilingual sentiment and emotion analysis.
+    """
     if not text or not text.strip():
         return {
             "success": False,
@@ -135,46 +199,125 @@ def analyze_sentiment(text: str) -> Dict:
         }
 
     try:
+        # Try pysentimiento first (more accurate)
+        sentiment_analyzer = get_sentiment_analyzer()
+        if sentiment_analyzer:
+            return analyze_sentiment_pysentimiento(text, sentiment_analyzer)
+
+        # Fallback to TextBlob
         if TEXTBLOB_AVAILABLE:
-            blob = TextBlob(text)
+            return analyze_sentiment_textblob(text)
 
-            # Sentiment analysis
-            polarity = blob.sentiment.polarity  # -1 to 1
-            subjectivity = blob.sentiment.subjectivity  # 0 to 1
-
-            # Extract entities (noun phrases)
-            entities = []
-            for phrase in blob.noun_phrases[:10]:
-                # Simple entity classification
-                entity_type = classify_entity(phrase)
-                entities.append({
-                    "name": phrase,
-                    "type": entity_type,
-                    "salience": round(1.0 / (blob.noun_phrases.index(phrase) + 1), 3),
-                    "sentiment": {
-                        "score": round(polarity, 3),
-                        "magnitude": round(abs(polarity) * subjectivity, 3)
-                    }
-                })
-
-            return {
-                "success": True,
-                "sentiment": {
-                    "score": round(polarity, 3),
-                    "magnitude": round(subjectivity, 3),
-                    "label": get_sentiment_label(polarity)
-                },
-                "entities": entities
-            }
-        else:
-            # Fallback: Simple rule-based sentiment
-            return analyze_sentiment_simple(text)
+        # Final fallback: Simple rule-based sentiment
+        return analyze_sentiment_simple(text)
 
     except Exception as e:
         return {
             "success": False,
             "error": str(e)
         }
+
+
+def analyze_sentiment_pysentimiento(text: str, analyzer) -> Dict:
+    """Analyze sentiment using pysentimiento (transformer-based)"""
+    try:
+        # Get sentiment prediction
+        result = analyzer.predict(text)
+
+        # Map pysentimiento output to our format
+        # pysentimiento returns: NEG, NEU, POS with probabilities
+        label_map = {"NEG": "Negative", "NEU": "Neutral", "POS": "Positive"}
+        label = label_map.get(result.output, "Neutral")
+
+        # Get confidence scores
+        probas = result.probas
+        pos_score = probas.get("POS", 0)
+        neg_score = probas.get("NEG", 0)
+        polarity = pos_score - neg_score  # Convert to -1 to 1 scale
+
+        # Try to get emotions too
+        emotions = []
+        emotion_analyzer = get_emotion_analyzer()
+        if emotion_analyzer:
+            try:
+                emotion_result = emotion_analyzer.predict(text)
+                for emotion, score in emotion_result.probas.items():
+                    if score > 0.1:  # Only include significant emotions
+                        emotions.append({
+                            "emotion": emotion.capitalize(),
+                            "score": round(score, 3)
+                        })
+                emotions.sort(key=lambda x: x["score"], reverse=True)
+            except Exception:
+                pass
+
+        # Extract entities using TextBlob
+        entities = []
+        if TEXTBLOB_AVAILABLE:
+            blob = TextBlob(text)
+            for i, phrase in enumerate(blob.noun_phrases[:10]):
+                entity_type = classify_entity(phrase)
+                entities.append({
+                    "name": phrase,
+                    "type": entity_type,
+                    "salience": round(1.0 / (i + 1), 3),
+                    "sentiment": {
+                        "score": round(polarity, 3),
+                        "magnitude": round(abs(polarity), 3)
+                    }
+                })
+
+        return {
+            "success": True,
+            "sentiment": {
+                "score": round(polarity, 3),
+                "magnitude": round(max(pos_score, neg_score), 3),
+                "label": label,
+                "confidence": round(max(probas.values()) * 100, 1)
+            },
+            "emotions": emotions[:5] if emotions else None,
+            "entities": entities,
+            "method": "pysentimiento"
+        }
+    except Exception as e:
+        # Fall back to TextBlob on error
+        if TEXTBLOB_AVAILABLE:
+            return analyze_sentiment_textblob(text)
+        return {"success": False, "error": str(e)}
+
+
+def analyze_sentiment_textblob(text: str) -> Dict:
+    """Analyze sentiment using TextBlob"""
+    blob = TextBlob(text)
+
+    # Sentiment analysis
+    polarity = blob.sentiment.polarity  # -1 to 1
+    subjectivity = blob.sentiment.subjectivity  # 0 to 1
+
+    # Extract entities (noun phrases)
+    entities = []
+    for i, phrase in enumerate(blob.noun_phrases[:10]):
+        entity_type = classify_entity(phrase)
+        entities.append({
+            "name": phrase,
+            "type": entity_type,
+            "salience": round(1.0 / (i + 1), 3),
+            "sentiment": {
+                "score": round(polarity, 3),
+                "magnitude": round(abs(polarity) * subjectivity, 3)
+            }
+        })
+
+    return {
+        "success": True,
+        "sentiment": {
+            "score": round(polarity, 3),
+            "magnitude": round(subjectivity, 3),
+            "label": get_sentiment_label(polarity)
+        },
+        "entities": entities,
+        "method": "textblob"
+    }
 
 
 def analyze_sentiment_simple(text: str) -> Dict:
@@ -333,10 +476,83 @@ def detect_logos_in_image(image_url: str) -> Dict:
         }
 
 
+def fetch_image(image_url: str) -> Optional[Image.Image]:
+    """Fetch image from URL and return PIL Image object"""
+    if not PIL_AVAILABLE:
+        return None
+
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(image_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return Image.open(BytesIO(response.content))
+    except Exception as e:
+        logger.error(f"Failed to fetch image: {e}")
+        return None
+
+
+def analyze_image_colors(image: Image.Image) -> Dict:
+    """Analyze dominant colors in image (useful for brand detection)"""
+    try:
+        # Resize for faster processing
+        img = image.copy()
+        img.thumbnail((150, 150))
+
+        # Convert to RGB if necessary
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # Get color data
+        pixels = list(img.getdata())
+        color_counts = Counter(pixels)
+
+        # Get top 5 dominant colors
+        dominant_colors = []
+        for color, count in color_counts.most_common(5):
+            # Convert RGB to hex
+            hex_color = '#{:02x}{:02x}{:02x}'.format(*color)
+            percentage = round(count / len(pixels) * 100, 1)
+            dominant_colors.append({
+                "color": hex_color,
+                "rgb": list(color),
+                "percentage": percentage
+            })
+
+        return {"dominant_colors": dominant_colors}
+    except Exception as e:
+        logger.error(f"Color analysis failed: {e}")
+        return {"dominant_colors": []}
+
+
+def analyze_image_properties(image: Image.Image) -> Dict:
+    """Analyze image properties (size, format, aspect ratio)"""
+    try:
+        width, height = image.size
+        aspect_ratio = round(width / height, 2) if height > 0 else 0
+
+        return {
+            "width": width,
+            "height": height,
+            "aspect_ratio": aspect_ratio,
+            "format": image.format or "Unknown",
+            "mode": image.mode,
+            "is_square": 0.9 <= aspect_ratio <= 1.1,
+            "is_banner": aspect_ratio > 2.5,
+            "is_portrait": aspect_ratio < 0.8
+        }
+    except Exception as e:
+        logger.error(f"Property analysis failed: {e}")
+        return {}
+
+
 def detect_brands_in_image(image_url: str) -> Dict:
     """
-    Detect brands and objects in an image (simplified version)
-    Returns basic analysis based on URL patterns
+    Detect brands and objects in an image.
+    Uses PIL for image analysis when available, falls back to URL analysis.
+
+    Inspired by LogoHunter approach but simplified for local use.
     """
     try:
         if not image_url:
@@ -350,7 +566,9 @@ def detect_brands_in_image(image_url: str) -> Dict:
         result = {
             "logos": [],
             "web_entities": [],
-            "labels": []
+            "labels": [],
+            "image_properties": {},
+            "colors": []
         }
 
         # Detect known brands from URL
@@ -364,6 +582,30 @@ def detect_brands_in_image(image_url: str) -> Dict:
                     "name": f"{brand.title()} Brand",
                     "score": 80.0
                 })
+
+        # Try to fetch and analyze the actual image
+        if PIL_AVAILABLE:
+            image = fetch_image(image_url)
+            if image:
+                # Analyze image properties
+                result["image_properties"] = analyze_image_properties(image)
+
+                # Analyze colors (can help identify brand colors)
+                color_analysis = analyze_image_colors(image)
+                result["colors"] = color_analysis.get("dominant_colors", [])
+
+                # Add labels based on image analysis
+                props = result["image_properties"]
+                if props.get("is_banner"):
+                    result["labels"].append({"name": "Banner", "confidence": 90.0})
+                if props.get("is_square"):
+                    result["labels"].append({"name": "Logo/Icon", "confidence": 75.0})
+
+                # Check for text-heavy images (logos often have high contrast)
+                if result["colors"]:
+                    # If image has very few colors, likely a logo
+                    if len(result["colors"]) <= 3:
+                        result["labels"].append({"name": "Graphic/Logo", "confidence": 80.0})
 
         # Add generic labels based on URL patterns
         if any(ext in url_lower for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]):
@@ -388,10 +630,11 @@ def detect_brands_in_image(image_url: str) -> Dict:
         return {
             "success": True,
             "data": result,
-            "method": "url_analysis",
-            "note": "For advanced image analysis, consider integrating a dedicated vision API"
+            "method": "local_analysis" if PIL_AVAILABLE else "url_analysis",
+            "note": "Enhanced with image analysis" if PIL_AVAILABLE else "Install Pillow for enhanced analysis"
         }
     except Exception as e:
+        logger.error(f"Brand detection failed: {e}")
         return {
             "success": False,
             "error": str(e)

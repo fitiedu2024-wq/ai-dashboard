@@ -26,7 +26,9 @@ export default function DeepAnalyze() {
       if (response.error) {
         showError('Error', response.error);
       } else {
-        setResult(response);
+        // Extract the nested data structure: response.data contains { success, data: { your_site, competitors } }
+        const analysisData = response.data?.data || response.data;
+        setResult({ data: analysisData });
       }
       setProgress(100);
     } catch (error) {
@@ -154,12 +156,12 @@ export default function DeepAnalyze() {
                   <div className="text-sm text-gray-400 mt-2">Schema Markup</div>
                 </div>
                 <div className="bg-white/5 p-4 rounded-xl text-center">
-                  <div className="text-3xl font-bold text-blue-400">{result.data.your_site?.mobile_friendly || 0}%</div>
+                  <div className="text-3xl font-bold text-blue-400">{result.data.your_site?.mobile_coverage || 0}%</div>
                   <div className="text-sm text-gray-400 mt-2">Mobile Friendly</div>
                 </div>
                 <div className="bg-white/5 p-4 rounded-xl text-center">
-                  <div className="text-3xl font-bold text-purple-400">{result.data.your_site?.avg_title_length || 0}</div>
-                  <div className="text-sm text-gray-400 mt-2">Avg Title Length</div>
+                  <div className="text-3xl font-bold text-purple-400">{result.data.your_site?.og_coverage || 0}%</div>
+                  <div className="text-sm text-gray-400 mt-2">Open Graph</div>
                 </div>
                 <div className="bg-white/5 p-4 rounded-xl text-center">
                   <div className="text-3xl font-bold text-pink-400">{result.data.your_site?.total_pages || 0}</div>
@@ -178,7 +180,7 @@ export default function DeepAnalyze() {
                 <div className="space-y-3">
                   {result.data.your_site.issues.map((issue: string, idx: number) => (
                     <div key={idx} className="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/20">
-                      <div className="text-yellow-300">⚠️ {issue}</div>
+                      <div className="text-yellow-300">{issue}</div>
                     </div>
                   ))}
                 </div>
@@ -191,7 +193,7 @@ export default function DeepAnalyze() {
                 <div className="space-y-3">
                   {result.data.your_site.recommendations.map((rec: string, idx: number) => (
                     <div key={idx} className="bg-green-500/10 p-4 rounded-xl border border-green-500/20">
-                      <div className="text-green-300">✓ {rec}</div>
+                      <div className="text-green-300">{rec}</div>
                     </div>
                   ))}
                 </div>
@@ -248,7 +250,7 @@ export default function DeepAnalyze() {
                               <span className="text-sm text-gray-400">Title:</span>
                               <span className="text-white ml-2">{page.analysis.title?.text}</span>
                               <span className={`ml-2 text-xs px-2 py-1 rounded ${page.analysis.title?.score === 100 ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
-                                {page.analysis.title?.recommendation}
+                                {page.analysis.title?.length} chars
                               </span>
                             </div>
                             <div>
@@ -272,24 +274,24 @@ export default function DeepAnalyze() {
               <div className="glass rounded-2xl p-8 border border-white/20">
                 <h3 className="text-2xl font-bold text-white mb-6">⚔️ Competitors Comparison</h3>
                 <div className="space-y-4">
-                  {Object.entries(result.data.competitors).map(([domain, data]: [string, any]) => (
-                    <div key={domain} className="bg-white/5 p-6 rounded-xl border border-white/10">
-                      <h4 className="font-bold text-xl text-white mb-4">{domain}</h4>
+                  {Object.entries(result.data.competitors).map(([compDomain, data]: [string, any]) => (
+                    <div key={compDomain} className="bg-white/5 p-6 rounded-xl border border-white/10">
+                      <h4 className="font-bold text-xl text-white mb-4">{compDomain}</h4>
                       <div className="grid grid-cols-4 gap-4">
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-purple-400">{data.total_pages}</div>
+                          <div className="text-2xl font-bold text-purple-400">{data.total_pages || 0}</div>
                           <div className="text-xs text-gray-400">Pages</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-pink-400">{data.avg_seo_score}</div>
+                          <div className="text-2xl font-bold text-pink-400">{data.avg_seo_score || 0}</div>
                           <div className="text-xs text-gray-400">SEO</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-green-400">{data.avg_word_count}</div>
+                          <div className="text-2xl font-bold text-green-400">{data.avg_word_count || 0}</div>
                           <div className="text-xs text-gray-400">Words</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-blue-400">{data.avg_alt_coverage}%</div>
+                          <div className="text-2xl font-bold text-blue-400">{data.avg_alt_coverage || 0}%</div>
                           <div className="text-xs text-gray-400">Alt</div>
                         </div>
                       </div>

@@ -1,0 +1,55 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/ai-marketing-dashboard:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/ai-marketing-dashboard:latest'
+      - '.'
+    dir: 'backend'
+  
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/ai-marketing-dashboard:$SHORT_SHA']
+  
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/ai-marketing-dashboard:latest']
+  
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'ai-marketing-dashboard'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/ai-marketing-dashboard:$SHORT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--max-instances'
+      - '10'
+      - '--min-instances'
+      - '0'
+      - '--port'
+      - '8080'
+      - '--set-env-vars'
+      - 'ADMIN_EMAIL=3ayoty@grinners.ai,ADMIN_PASSWORD=AliTia20'
+
+images:
+  - 'gcr.io/$PROJECT_ID/ai-marketing-dashboard:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/ai-marketing-dashboard:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+timeout: '1200s'
