@@ -789,8 +789,13 @@ async def sentiment_analysis(request: SentimentRequest, token: str = Depends(oau
     if result.get("success"):
         return {
             "success": True,
-            "sentiment": result.get("sentiment"),
-            "entities": result.get("entities", [])
+            "data": {
+                "success": True,
+                "sentiment": result.get("sentiment"),
+                "entities": result.get("entities", []),
+                "emotions": result.get("emotions", []),
+                "method": result.get("method", "textblob")
+            }
         }
     else:
         return {
