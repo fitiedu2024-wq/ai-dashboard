@@ -32,22 +32,33 @@ export default function KeywordAnalysis() {
       setResults(null);
     } else if (data) {
       setResults(data);
-      success('Analysis Complete', `Found ${data.data?.keywords?.length || 0} keywords`);
+      // Fix: Access nested data structure correctly
+      const analysisData = data.data || data;
+      success('Analysis Complete', `Found ${analysisData?.keywords?.length || 0} keywords`);
     }
 
     setLoading(false);
   };
 
+  // Helper to get the actual data (handles both nested and flat structures)
+  const getAnalysisData = () => {
+    if (!results) return null;
+    // Handle double-nested structure from API wrapper
+    return results.data?.data || results.data || results;
+  };
+
+  const analysisData = getAnalysisData();
+
   const handleExportCSV = () => {
-    if (!results?.data?.keywords) return;
-    exportKeywordsToCSV(results.data.keywords, domain);
+    if (!analysisData?.keywords) return;
+    exportKeywordsToCSV(analysisData.keywords, domain);
     success('Exported', 'Keywords CSV downloaded');
   };
 
   const handleExportPDF = () => {
-    if (!results?.data?.keywords) return;
+    if (!analysisData?.keywords) return;
 
-    const keywordsHTML = results.data.keywords.slice(0, 30).map((kw: any) => `
+    const keywordsHTML = analysisData.keywords.slice(0, 30).map((kw: any) => `
       <tr>
         <td>${kw.term}</td>
         <td>${kw.priority}</td>
@@ -60,11 +71,11 @@ export default function KeywordAnalysis() {
       <h2>Domain: ${domain}</h2>
       <div style="display: flex; gap: 20px; margin: 20px 0;">
         <div class="metric">
-          <div class="metric-value">${results.data.keywords.length}</div>
+          <div class="metric-value">${analysisData.keywords.length}</div>
           <div class="metric-label">Total Keywords</div>
         </div>
         <div class="metric">
-          <div class="metric-value">${results.data.keywords.filter((k: any) => k.priority === 'high').length}</div>
+          <div class="metric-value">${analysisData.keywords.filter((k: any) => k.priority === 'high').length}</div>
           <div class="metric-label">High Priority</div>
         </div>
       </div>
@@ -82,9 +93,9 @@ export default function KeywordAnalysis() {
           ${keywordsHTML}
         </tbody>
       </table>
-      ${results.data.recommendations?.length > 0 ? `
+      ${analysisData.recommendations?.length > 0 ? `
         <h2>Recommendations</h2>
-        ${results.data.recommendations.map((rec: string) => `<div class="recommendation">${rec}</div>`).join('')}
+        ${analysisData.recommendations.map((rec: string) => `<div class="recommendation">${rec}</div>`).join('')}
       ` : ''}
     `;
 
@@ -93,7 +104,7 @@ export default function KeywordAnalysis() {
   };
 
   // Filter and search keywords
-  const filteredKeywords = results?.data?.keywords?.filter((kw: any) => {
+  const filteredKeywords = analysisData?.keywords?.filter((kw: any) => {
     const matchesFilter = filter === 'all' || kw.priority === filter;
     const matchesSearch = !searchTerm || kw.term.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesFilter && matchesSearch;
@@ -151,7 +162,7 @@ export default function KeywordAnalysis() {
         {loading && <AnalysisResultSkeleton />}
 
         {/* Results */}
-        {results?.data && !loading && (
+        {analysisData && !loading && (
           <div className="space-y-6">
             {/* Export & Filter Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -207,7 +218,7 @@ export default function KeywordAnalysis() {
                   <div className="text-sm text-gray-400">Total Keywords</div>
                 </div>
                 <div className="text-4xl font-bold text-white">
-                  {results.data.keywords?.length || 0}
+                  {analysisData.keywords?.length || 0}
                 </div>
               </div>
 
@@ -219,7 +230,7 @@ export default function KeywordAnalysis() {
                   <div className="text-sm text-gray-400">High Priority</div>
                 </div>
                 <div className="text-4xl font-bold text-white">
-                  {results.data.keywords?.filter((k: any) => k.priority === 'high').length || 0}
+                  {analysisData.keywords?.filter((k: any) => k.priority === 'high').length || 0}
                 </div>
               </div>
 
@@ -231,7 +242,7 @@ export default function KeywordAnalysis() {
                   <div className="text-sm text-gray-400">Pages Analyzed</div>
                 </div>
                 <div className="text-4xl font-bold text-white">
-                  {results.data.site_analysis?.total_pages || 0}
+                  {analysisData.site_analysis?.total_pages || 0}
                 </div>
               </div>
             </div>
@@ -281,14 +292,14 @@ export default function KeywordAnalysis() {
             </div>
 
             {/* Recommendations */}
-            {results.data.recommendations?.length > 0 && (
+            {analysisData.recommendations?.length > 0 && (
               <div className="glass rounded-2xl p-6 lg:p-8 border-l-4 border-blue-500">
                 <h3 className="text-xl lg:text-2xl font-bold text-white mb-6 flex items-center gap-3">
                   <TrendingUp className="w-6 h-6 text-blue-400" />
                   Recommendations
                 </h3>
                 <div className="space-y-3">
-                  {results.data.recommendations.map((rec: string, idx: number) => (
+                  {analysisData.recommendations.map((rec: string, idx: number) => (
                     <div key={idx} className="bg-blue-500/10 p-4 rounded-xl border border-blue-500/20 text-blue-300">
                       {rec}
                     </div>

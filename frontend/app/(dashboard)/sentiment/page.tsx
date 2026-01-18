@@ -9,7 +9,7 @@ export default function Sentiment() {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
-  const { error: showError } = useToast();
+  const { error: showError, success } = useToast();
 
   const analyze = async () => {
     setLoading(true);
@@ -19,6 +19,7 @@ export default function Sentiment() {
         showError('Error', response.error);
       } else {
         setResults(response.data);
+        success('Analysis Complete', 'Sentiment analyzed successfully');
       }
     } catch (error) {
       console.error('Error:', error);
@@ -26,6 +27,20 @@ export default function Sentiment() {
     }
     setLoading(false);
   };
+
+  // Helper to get the actual data (handles both nested and flat structures)
+  const getAnalysisData = () => {
+    if (!results) return null;
+    // Handle double-nested structure from API wrapper
+    return results.data || results;
+  };
+
+  const analysisData = getAnalysisData();
+  const isSuccess = results?.success || analysisData?.success;
+  const sentiment = analysisData?.sentiment;
+  const emotions = analysisData?.emotions;
+  const entities = analysisData?.entities;
+  const method = analysisData?.method;
 
   return (
     <div className="p-8 min-h-screen">
@@ -83,33 +98,33 @@ export default function Sentiment() {
           </button>
         </div>
 
-        {results?.success && (
+        {isSuccess && (
           <div className="glass rounded-2xl p-8 border-2 border-green-400/50">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-6">
                 <TrendingUp className="w-12 h-12 text-green-400" />
                 <div>
-                  <div className="text-4xl font-bold text-white mb-1">{results.sentiment?.label}</div>
+                  <div className="text-4xl font-bold text-white mb-1">{sentiment?.label}</div>
                   <div className="text-gray-300">
-                    Confidence: {results.sentiment?.confidence ? `${results.sentiment.confidence}%` : `${Math.abs((results.sentiment?.score || 0) * 100).toFixed(1)}%`}
+                    Confidence: {sentiment?.confidence ? `${sentiment.confidence}%` : `${Math.abs((sentiment?.score || 0) * 100).toFixed(1)}%`}
                   </div>
                 </div>
               </div>
-              {results.method && (
+              {method && (
                 <div className="text-right">
-                  <span className={`px-3 py-1 rounded-full text-xs ${results.method === 'pysentimiento' ? 'bg-purple-500/30 text-purple-300' : 'bg-blue-500/30 text-blue-300'}`}>
-                    {results.method === 'pysentimiento' ? '🤖 Transformer AI' : '📚 TextBlob'}
+                  <span className={`px-3 py-1 rounded-full text-xs ${method === 'pysentimiento' ? 'bg-purple-500/30 text-purple-300' : 'bg-blue-500/30 text-blue-300'}`}>
+                    {method === 'pysentimiento' ? '🤖 Transformer AI' : '📚 TextBlob'}
                   </span>
                 </div>
               )}
             </div>
 
             {/* Emotions (from pysentimiento) */}
-            {results.emotions && results.emotions.length > 0 && (
+            {emotions && emotions.length > 0 && (
               <div className="mb-6">
                 <h4 className="font-bold text-white mb-4">🎭 Detected Emotions</h4>
                 <div className="flex flex-wrap gap-3">
-                  {results.emotions.map((emotion: any, idx: number) => (
+                  {emotions.map((emotion: any, idx: number) => (
                     <div key={idx} className="flex items-center gap-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/30 px-4 py-2 rounded-xl">
                       <span className="text-lg">
                         {emotion.emotion === 'Joy' && '😊'}
@@ -134,11 +149,11 @@ export default function Sentiment() {
             <div className="bg-white/5 p-6 rounded-xl mb-6">
               <h4 className="font-bold text-white mb-3">Interpretation</h4>
               <p className="text-gray-300">
-                {results.sentiment?.label === 'Positive' &&
+                {sentiment?.label === 'Positive' &&
                   'The text expresses positive emotions and satisfaction. This is great feedback that indicates customer happiness.'}
-                {results.sentiment?.label === 'Negative' &&
+                {sentiment?.label === 'Negative' &&
                   'The text contains negative emotions or dissatisfaction. Consider addressing these concerns promptly.'}
-                {results.sentiment?.label === 'Neutral' &&
+                {sentiment?.label === 'Neutral' &&
                   'The text is objective or factual without strong emotional indicators.'}
               </p>
             </div>
@@ -147,21 +162,21 @@ export default function Sentiment() {
             <div className="bg-blue-500/10 p-6 rounded-xl border border-blue-500/20">
               <h4 className="font-bold text-white mb-3">Actionable Insights</h4>
               <div className="space-y-2 text-sm text-gray-300">
-                {results.sentiment?.label === 'Positive' && (
+                {sentiment?.label === 'Positive' && (
                   <>
                     <div>• Share this positive feedback with your team for motivation</div>
                     <div>• Consider using as a testimonial (with permission)</div>
                     <div>• Identify what made this customer happy and replicate it</div>
                   </>
                 )}
-                {results.sentiment?.label === 'Negative' && (
+                {sentiment?.label === 'Negative' && (
                   <>
                     <div>• Respond quickly to address concerns</div>
                     <div>• Investigate root causes to prevent future issues</div>
                     <div>• Follow up to ensure satisfaction</div>
                   </>
                 )}
-                {results.sentiment?.label === 'Neutral' && (
+                {sentiment?.label === 'Neutral' && (
                   <>
                     <div>• The content is informational or factual</div>
                     <div>• Consider adding emotional elements to marketing copy</div>
@@ -171,11 +186,11 @@ export default function Sentiment() {
               </div>
             </div>
 
-            {results.entities && results.entities.length > 0 && (
+            {entities && entities.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-xl font-bold text-white mb-4">🏷️ Key Entities Mentioned</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {results.entities.map((entity: any, idx: number) => (
+                  {entities.map((entity: any, idx: number) => (
                     <div key={idx} className="bg-white/5 p-4 rounded-xl">
                       <div className="font-bold text-white">{entity.name}</div>
                       <div className="text-sm text-gray-400">Type: {entity.type}</div>

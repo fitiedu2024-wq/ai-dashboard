@@ -10,7 +10,7 @@ export default function AdsAnalysis() {
   const [brandName, setBrandName] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
-  const { error: showError } = useToast();
+  const { error: showError, success } = useToast();
 
   const analyze = async () => {
     setLoading(true);
@@ -20,6 +20,7 @@ export default function AdsAnalysis() {
         showError('Error', response.error);
       } else {
         setResults(response.data);
+        success('Analysis Complete', 'Ad library links generated successfully');
       }
     } catch (error) {
       console.error('Error:', error);
@@ -27,6 +28,15 @@ export default function AdsAnalysis() {
     }
     setLoading(false);
   };
+
+  // Helper to get the actual data (handles both nested and flat structures)
+  const getAnalysisData = () => {
+    if (!results) return null;
+    // Handle double-nested structure from API wrapper
+    return results.data?.data || results.data || results;
+  };
+
+  const analysisData = getAnalysisData();
 
   return (
     <div className="p-8 min-h-screen">
@@ -72,10 +82,27 @@ export default function AdsAnalysis() {
           </button>
         </div>
 
-        {results?.success && results?.data?.platforms && (
+        {results?.success && analysisData?.platforms && (
           <div className="space-y-6">
+            {/* Social Accounts Found */}
+            {analysisData.social_accounts && Object.keys(analysisData.social_accounts).length > 0 && (
+              <div className="glass rounded-2xl p-8 border border-cyan-400/30">
+                <h3 className="text-2xl font-bold text-white mb-6">🔗 Social Accounts Found</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {Object.entries(analysisData.social_accounts).map(([platform, username]: [string, any]) => (
+                    username && (
+                      <div key={platform} className="bg-white/5 p-4 rounded-xl text-center">
+                        <div className="text-sm text-gray-400 capitalize">{platform}</div>
+                        <div className="font-bold text-white">{username}</div>
+                      </div>
+                    )
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Meta (Facebook/Instagram) */}
-            {results.data.platforms.meta?.url && (
+            {analysisData.platforms.meta?.url && (
               <div className="glass rounded-2xl p-8 border border-blue-400/30">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
@@ -88,7 +115,7 @@ export default function AdsAnalysis() {
                 </div>
 
                 <a
-                  href={results.data.platforms.meta.url}
+                  href={analysisData.platforms.meta.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all"
@@ -100,7 +127,7 @@ export default function AdsAnalysis() {
             )}
 
             {/* TikTok */}
-            {results.data.platforms.tiktok?.url && (
+            {analysisData.platforms.tiktok?.url && (
               <div className="glass rounded-2xl p-8 border border-purple-400/30">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
@@ -114,16 +141,16 @@ export default function AdsAnalysis() {
                   </div>
                 </div>
 
-                {results.data.platforms.tiktok.username && (
+                {analysisData.platforms.tiktok.username && (
                   <div className="bg-purple-500/10 p-4 rounded-xl mb-4">
                     <div className="text-sm text-gray-300">
-                      <strong>Username:</strong> {results.data.platforms.tiktok.username}
+                      <strong>Username:</strong> {analysisData.platforms.tiktok.username}
                     </div>
                   </div>
                 )}
 
                 <a
-                  href={results.data.platforms.tiktok.url}
+                  href={analysisData.platforms.tiktok.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all"
@@ -135,7 +162,7 @@ export default function AdsAnalysis() {
             )}
 
             {/* Google */}
-            {results.data.platforms.google?.url && (
+            {analysisData.platforms.google?.url && (
               <div className="glass rounded-2xl p-8 border border-green-400/30">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
@@ -153,7 +180,7 @@ export default function AdsAnalysis() {
                 </div>
 
                 <a
-                  href={results.data.platforms.google.url}
+                  href={analysisData.platforms.google.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all"

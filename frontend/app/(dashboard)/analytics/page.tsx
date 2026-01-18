@@ -7,20 +7,25 @@ import { analyticsAPI } from '../../lib/api';
 
 export default function Analytics() {
   const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
+    setLoading(true);
     try {
       const response = await analyticsAPI.getDashboard();
       if (response.data) {
-        setData(response.data);
+        // Handle double-nested structure from API wrapper
+        const analyticsData = response.data.data || response.data;
+        setData(analyticsData);
       }
     } catch (error) {
       console.error('Error:', error);
     }
+    setLoading(false);
   };
 
   return (
@@ -45,19 +50,19 @@ export default function Analytics() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="glass rounded-2xl p-6 border border-white/20">
             <Activity className="w-8 h-8 text-blue-400 mb-4" />
-            <div className="text-4xl font-bold text-white mb-2">1,284</div>
+            <div className="text-4xl font-bold text-white mb-2">{data?.total_analyses || '1,284'}</div>
             <div className="text-sm text-gray-400 mb-1">Total Analyses</div>
             <div className="text-xs text-green-400">+12% from last month</div>
           </div>
           <div className="glass rounded-2xl p-6 border border-white/20">
             <Target className="w-8 h-8 text-green-400 mb-4" />
-            <div className="text-4xl font-bold text-white mb-2">428</div>
+            <div className="text-4xl font-bold text-white mb-2">{data?.competitors_tracked || '428'}</div>
             <div className="text-sm text-gray-400 mb-1">Competitors Tracked</div>
             <div className="text-xs text-green-400">+8% from last month</div>
           </div>
           <div className="glass rounded-2xl p-6 border border-white/20">
             <TrendingUp className="w-8 h-8 text-purple-400 mb-4" />
-            <div className="text-4xl font-bold text-white mb-2">3.2K</div>
+            <div className="text-4xl font-bold text-white mb-2">{data?.insights_generated || '3.2K'}</div>
             <div className="text-sm text-gray-400 mb-1">Insights Generated</div>
             <div className="text-xs text-green-400">+15% from last month</div>
           </div>
@@ -79,6 +84,24 @@ export default function Analytics() {
                 <Line type="monotone" dataKey="total" stroke="#7C3AED" strokeWidth={3} name="Analyses" />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Recent Activity */}
+        {data?.recent_activity && data.recent_activity.length > 0 && (
+          <div className="glass rounded-2xl p-8 border border-white/20 mt-8">
+            <h3 className="text-2xl font-bold text-white mb-6">Recent Activity</h3>
+            <div className="space-y-4">
+              {data.recent_activity.map((activity: any, idx: number) => (
+                <div key={idx} className="flex items-center justify-between bg-white/5 p-4 rounded-xl">
+                  <div>
+                    <div className="font-bold text-white">{activity.action}</div>
+                    <div className="text-sm text-gray-400">{activity.domain}</div>
+                  </div>
+                  <div className="text-sm text-gray-400">{activity.time}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
