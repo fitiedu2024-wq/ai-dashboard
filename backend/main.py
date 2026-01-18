@@ -936,3 +936,875 @@ def get_user_reports(user_id: int, token: str = Depends(oauth2_scheme), db: Sess
             for r in reports
         ]
     }
+
+
+# ==================== ADVANCED MARKETING INTELLIGENCE ====================
+
+# Template configurations for different business types
+BUSINESS_TEMPLATES = {
+    "saas": {
+        "name": "SaaS",
+        "focus_areas": ["MRR/ARR growth", "Churn reduction", "Trial-to-paid conversion", "Feature adoption", "Customer success"],
+        "metrics": ["MRR", "Churn Rate", "CAC", "LTV", "Trial Conversion", "NPS", "DAU/MAU"],
+        "content_types": ["Product tutorials", "Case studies", "Comparison posts", "Integration guides", "Webinars"]
+    },
+    "ecom": {
+        "name": "E-Commerce",
+        "focus_areas": ["Product page optimization", "Cart abandonment", "Average order value", "Return customers", "Shipping/fulfillment"],
+        "metrics": ["AOV", "Conversion Rate", "Cart Abandonment", "ROAS", "Customer Lifetime Value", "Return Rate"],
+        "content_types": ["Product guides", "Buying guides", "Unboxing videos", "User reviews", "Seasonal campaigns"]
+    },
+    "local": {
+        "name": "Local Business",
+        "focus_areas": ["Google My Business", "Local SEO", "Reviews management", "NAP consistency", "Local citations"],
+        "metrics": ["GMB Ranking", "Review Score", "Local Pack Position", "Phone Calls", "Direction Requests"],
+        "content_types": ["Local guides", "Community posts", "Before/after content", "Customer testimonials", "Local events"]
+    },
+    "agency": {
+        "name": "Agency",
+        "focus_areas": ["Portfolio showcase", "Case studies", "Lead generation", "Thought leadership", "Client retention"],
+        "metrics": ["Lead Quality Score", "Proposal Win Rate", "Client Retention", "Average Project Value", "Referral Rate"],
+        "content_types": ["Case studies", "Process breakdowns", "Industry insights", "Client success stories", "Expert interviews"]
+    },
+    "course": {
+        "name": "Course Creator",
+        "focus_areas": ["Webinar funnels", "Email sequences", "Course completion", "Student success", "Upsells/cross-sells"],
+        "metrics": ["Webinar Attendance", "Course Completion Rate", "Student NPS", "Upsell Rate", "Refund Rate"],
+        "content_types": ["Free mini-courses", "Webinars", "Student testimonials", "Behind-the-scenes", "Quick tips"]
+    },
+    "general": {
+        "name": "General",
+        "focus_areas": ["Brand awareness", "Lead generation", "Content marketing", "SEO", "Social media"],
+        "metrics": ["Traffic", "Leads", "Conversion Rate", "Engagement", "Brand Mentions"],
+        "content_types": ["Blog posts", "Videos", "Infographics", "Podcasts", "Social posts"]
+    }
+}
+
+BRAND_ARCHETYPES = [
+    {"name": "The Innocent", "traits": "pure, optimistic, simple"},
+    {"name": "The Explorer", "traits": "adventurous, independent, pioneering"},
+    {"name": "The Sage", "traits": "wise, knowledgeable, expert"},
+    {"name": "The Hero", "traits": "courageous, bold, inspirational"},
+    {"name": "The Outlaw", "traits": "rebellious, disruptive, revolutionary"},
+    {"name": "The Magician", "traits": "transformative, visionary, innovative"},
+    {"name": "The Regular Guy", "traits": "relatable, authentic, down-to-earth"},
+    {"name": "The Lover", "traits": "passionate, intimate, indulgent"},
+    {"name": "The Jester", "traits": "fun, playful, entertaining"},
+    {"name": "The Caregiver", "traits": "nurturing, supportive, compassionate"},
+    {"name": "The Creator", "traits": "imaginative, artistic, innovative"},
+    {"name": "The Ruler", "traits": "authoritative, prestigious, leading"}
+]
+
+class BusinessIntelRequest(BaseModel):
+    domain: str
+    business_type: str = "general"  # saas, ecom, local, agency, course, general
+
+@app.post("/api/business-intel")
+async def business_intelligence(request: BusinessIntelRequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Template-based business intelligence analysis with brand archetypes"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user = db.query(User).filter(User.email == payload.get("sub")).first()
+        
+        if not user:
+            raise HTTPException(401, "User not found")
+        
+        # Get template config
+        template = BUSINESS_TEMPLATES.get(request.business_type, BUSINESS_TEMPLATES["general"])
+        
+        # Crawl website for context
+        logger.info(f"Crawling {request.domain} for business intelligence")
+        site_data = crawl_site(request.domain, 10)
+        
+        # Build context from crawled data
+        context = f"Website: {request.domain}\n"
+        context += f"Business Type: {template['name']}\n\n"
+        
+        if site_data.get('pages'):
+            for page in site_data['pages'][:5]:
+                if 'analysis' in page:
+                    analysis = page['analysis']
+                    if 'title' in analysis:
+                        context += f"Title: {analysis['title'].get('text', '')}\n"
+                    if 'meta' in analysis:
+                        context += f"Description: {analysis['meta'].get('description', '')}\n"
+                    if 'content' in analysis and 'headings' in analysis['content']:
+                        context += f"Headings: {', '.join(analysis['content']['headings'][:5])}\n"
+                    context += "\n"
+        
+        # Generate business intelligence using Gemini
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""You are an elite Business Intelligence Analyst and Brand Strategist.
+
+Analyze this {template['name']} business: {request.domain}
+
+CONTEXT:
+{context}
+
+PROVIDE COMPREHENSIVE ANALYSIS:
+
+1. **Company Profile**
+   - Name, industry, sub-industry
+   - Business model, target audience
+   - Unique Value Proposition
+   - Market position
+
+2. **Brand Archetype** (choose from: {', '.join([a['name'] + ' (' + a['traits'] + ')' for a in BRAND_ARCHETYPES])})
+   - Primary archetype and why it fits
+   - Voice guidelines (5 specific guidelines)
+   - Messaging dos (5 items)
+   - Messaging don'ts (5 items)
+
+3. **Psychographics** (target audience deep profiling)
+   - Core values (5 values)
+   - Hidden fears (5 fears)
+   - Deep desires (5 desires)
+   - Lifestyle characteristics (5 traits)
+   - Buying triggers (5 triggers)
+
+4. **Jobs to Be Done (JTBD)**
+   - Functional jobs: 3 jobs they need to accomplish
+   - Emotional jobs: 3 ways they want to feel
+   - Social jobs: 3 ways they want to be perceived
+
+5. **3 Buyer Personas** with:
+   - Name, role, demographics
+   - Top 3 goals
+   - Top 3 challenges
+   - Top 3 objections
+   - Content preferences
+
+6. **Strategic Insights**
+   - Top 5 strengths
+   - Top 5 opportunities
+   - 3 quick wins with ICE scores (Impact×Confidence×Ease)
+
+FOCUS AREAS for {template['name']}: {', '.join(template['focus_areas'])}
+KEY METRICS: {', '.join(template['metrics'])}
+
+Return ONLY valid JSON with this exact structure:
+{{
+  "profile": {{
+    "name": "string",
+    "industry": "string",
+    "businessModel": "string",
+    "targetAudience": "string",
+    "uniqueValueProposition": "string",
+    "marketPosition": "string"
+  }},
+  "brandArchetype": {{
+    "primary": "string",
+    "reasoning": "string",
+    "voiceGuidelines": ["string"],
+    "messagingDos": ["string"],
+    "messagingDonts": ["string"]
+  }},
+  "psychographics": {{
+    "coreValues": ["string"],
+    "hiddenFears": ["string"],
+    "deepDesires": ["string"],
+    "lifestyle": ["string"],
+    "buyingTriggers": ["string"]
+  }},
+  "jobsToBeDone": {{
+    "functional": ["string"],
+    "emotional": ["string"],
+    "social": ["string"]
+  }},
+  "buyerPersonas": [
+    {{
+      "name": "string",
+      "role": "string",
+      "demographics": "string",
+      "goals": ["string"],
+      "challenges": ["string"],
+      "objections": ["string"],
+      "contentPreferences": ["string"]
+    }}
+  ],
+  "insights": {{
+    "strengths": ["string"],
+    "opportunities": ["string"],
+    "quickWins": [
+      {{
+        "description": "string",
+        "impact": 8,
+        "confidence": 9,
+        "ease": 7,
+        "iceScore": 504
+      }}
+    ]
+  }}
+}}"""
+
+        response = model.generate_content(prompt)
+        result_text = response.text
+        
+        # Parse JSON from response
+        import json
+        import re
+        
+        # Try to extract JSON from markdown code blocks
+        json_match = re.search(r'```json\s*(.*?)\s*```', result_text, re.DOTALL)
+        if json_match:
+            result_text = json_match.group(1)
+        else:
+            # Try to find JSON object
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if json_match:
+                result_text = json_match.group(0)
+        
+        analysis_data = json.loads(result_text)
+        
+        # Log activity
+        if user:
+            log_activity(db, user.id, user.email, "Business Intelligence", f"Analyzed {request.domain} as {template['name']}", get_client_ip(req))
+        
+        return {
+            "success": True,
+            "data": {
+                "success": True,
+                "domain": request.domain,
+                "businessType": template['name'],
+                "template": template,
+                "analysis": analysis_data,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        }
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Failed to parse AI response: {str(e)}"
+        }
+    except Exception as e:
+        logger.error(f"Business intelligence error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+class KeywordIntentRequest(BaseModel):
+    domain: str
+    business_type: str = "general"
+
+@app.post("/api/keyword-intent")
+async def keyword_by_intent(request: KeywordIntentRequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Generate 30 keywords organized by search intent (Informational, Navigational, Commercial, Transactional)"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user = db.query(User).filter(User.email == payload.get("sub")).first()
+        
+        if not user:
+            raise HTTPException(401, "User not found")
+        
+        template = BUSINESS_TEMPLATES.get(request.business_type, BUSINESS_TEMPLATES["general"])
+        
+        # Crawl website for context
+        logger.info(f"Analyzing keywords for {request.domain}")
+        site_data = crawl_site(request.domain, 10)
+        
+        # Build context
+        context = ""
+        if site_data.get('pages'):
+            for page in site_data['pages'][:5]:
+                if 'analysis' in page:
+                    analysis = page['analysis']
+                    if 'title' in analysis:
+                        context += analysis['title'].get('text', '') + " "
+                    if 'meta' in analysis:
+                        context += analysis['meta'].get('description', '') + " "
+        
+        # Generate keywords using Gemini
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""You are an elite SEO and Keyword Research Expert.
+
+Analyze {request.domain} ({template['name']} business) and generate 30 high-value keywords organized by SEARCH INTENT.
+
+CONTEXT: {context}
+
+SEARCH INTENT CATEGORIES:
+1. **Informational** (learning): how to, what is, guide, tutorial, tips
+2. **Navigational** (finding): brand name, login, contact, specific page
+3. **Commercial** (researching): best, top, review, comparison, vs, alternative
+4. **Transactional** (purchasing): buy, price, discount, deal, order, cost
+
+For each keyword provide:
+- Search volume (monthly searches)
+- Difficulty (0-100, where 100 is hardest to rank)
+- Current rank (1-100 or "Not ranking")
+- CPC (cost per click in USD)
+- Trend (Rising/Stable/Falling)
+- Opportunity score (0-100, based on volume, difficulty, and relevance)
+
+BUSINESS TYPE: {template['name']}
+FOCUS AREAS: {', '.join(template['focus_areas'])}
+
+Return ONLY valid JSON:
+{{
+  "keywords": {{
+    "informational": [
+      {{
+        "term": "string",
+        "volume": "5000",
+        "difficulty": 45,
+        "currentRank": "Not ranking",
+        "cpc": "$2.50",
+        "trend": "Rising",
+        "opportunityScore": 75
+      }}
+    ],
+    "navigational": [...],
+    "commercial": [...],
+    "transactional": [...]
+  }},
+  "summary": {{
+    "totalKeywords": 30,
+    "avgDifficulty": 50,
+    "avgOpportunityScore": 70,
+    "topOpportunities": ["keyword1", "keyword2", "keyword3"]
+  }}
+}}
+
+Generate exactly 30 keywords total (distribute across all 4 intent categories)."""
+
+        response = model.generate_content(prompt)
+        result_text = response.text
+        
+        # Parse JSON
+        import json
+        import re
+        
+        json_match = re.search(r'```json\s*(.*?)\s*```', result_text, re.DOTALL)
+        if json_match:
+            result_text = json_match.group(1)
+        else:
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if json_match:
+                result_text = json_match.group(0)
+        
+        keyword_data = json.loads(result_text)
+        
+        # Log activity
+        if user:
+            log_activity(db, user.id, user.email, "Keyword Intent Analysis", f"Generated keywords for {request.domain}", get_client_ip(req))
+        
+        return {
+            "success": True,
+            "data": {
+                "success": True,
+                "domain": request.domain,
+                "businessType": template['name'],
+                "keywords": keyword_data.get("keywords", {}),
+                "summary": keyword_data.get("summary", {}),
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Keyword intent analysis error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+class ContentCalendarRequest(BaseModel):
+    domain: str
+    business_type: str = "general"
+    brand_archetype: Optional[str] = None
+
+@app.post("/api/content-calendar")
+async def content_calendar(request: ContentCalendarRequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Generate 90-day content calendar with social posts and ad concepts"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user = db.query(User).filter(User.email == payload.get("sub")).first()
+        
+        if not user:
+            raise HTTPException(401, "User not found")
+        
+        template = BUSINESS_TEMPLATES.get(request.business_type, BUSINESS_TEMPLATES["general"])
+        
+        # Crawl website
+        logger.info(f"Creating content calendar for {request.domain}")
+        site_data = crawl_site(request.domain, 10)
+        
+        # Build context
+        context = ""
+        if site_data.get('pages'):
+            for page in site_data['pages'][:5]:
+                if 'analysis' in page:
+                    analysis = page['analysis']
+                    if 'title' in analysis:
+                        context += analysis['title'].get('text', '') + " "
+                    if 'meta' in analysis:
+                        context += analysis['meta'].get('description', '') + " "
+        
+        # Generate content calendar using Gemini
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        archetype_note = f"\nBRAND ARCHETYPE: {request.brand_archetype}" if request.brand_archetype else ""
+        
+        prompt = f"""You are an elite Content Strategist and Viral Marketing Expert.
+
+Create a 90-day content calendar for {request.domain} ({template['name']} business).
+
+CONTEXT: {context}{archetype_note}
+
+CREATE:
+
+1. **4 Content Pillars**
+   Each with name, description, and 3 target keywords
+
+2. **Content Funnel** (15 ideas total):
+   - ToFu (Awareness): 5 ideas with viral hooks
+   - MoFu (Consideration): 5 ideas with trust builders
+   - BoFu (Conversion): 5 ideas with urgency drivers
+
+3. **Social Media Posts** (5 per platform):
+   - LinkedIn: Professional, thought leadership
+   - Twitter/X: Snappy, engaging
+   - Instagram: Visual, lifestyle
+   - TikTok: Trendy, entertaining
+   - Facebook: Community-focused
+
+4. **5 Ad Concepts**:
+   - Platform, headline, description
+   - Target audience, budget suggestion
+   - Expected CTR range
+
+CONTENT TYPES for {template['name']}: {', '.join(template['content_types'])}
+
+Return ONLY valid JSON:
+{{
+  "pillars": [
+    {{"name": "string", "description": "string", "keywords": ["string"]}}
+  ],
+  "contentFunnel": {{
+    "tofu": [
+      {{
+        "title": "string",
+        "type": "Blog/Video/Infographic",
+        "description": "string",
+        "viralHook": "string",
+        "emotionalTrigger": "string",
+        "estimatedTraffic": "500",
+        "publishDate": "Week 1"
+      }}
+    ],
+    "mofu": [...],
+    "bofu": [...]
+  }},
+  "socialPosts": {{
+    "linkedin": [
+      {{"content": "string", "hashtags": ["string"], "bestTime": "Tuesday 10am", "hook": "string"}}
+    ],
+    "twitter": [...],
+    "instagram": [...],
+    "tiktok": [...],
+    "facebook": [...]
+  }},
+  "adConcepts": [
+    {{
+      "platform": "Google/Facebook/Instagram/LinkedIn/TikTok",
+      "headline": "string",
+      "description": "string",
+      "targetAudience": "string",
+      "budget": "$500/month",
+      "expectedCtr": "2-4%"
+    }}
+  ],
+  "schedule": {{
+    "month1": ["Week 1: Content 1", "Week 2: Content 2", "Week 3: Content 3", "Week 4: Content 4"],
+    "month2": [...],
+    "month3": [...]
+  }}
+}}"""
+
+        response = model.generate_content(prompt)
+        result_text = response.text
+        
+        # Parse JSON
+        import json
+        import re
+        
+        json_match = re.search(r'```json\s*(.*?)\s*```', result_text, re.DOTALL)
+        if json_match:
+            result_text = json_match.group(1)
+        else:
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if json_match:
+                result_text = json_match.group(0)
+        
+        calendar_data = json.loads(result_text)
+        
+        # Log activity
+        if user:
+            log_activity(db, user.id, user.email, "Content Calendar", f"Generated 90-day plan for {request.domain}", get_client_ip(req))
+        
+        return {
+            "success": True,
+            "data": {
+                "success": True,
+                "domain": request.domain,
+                "businessType": template['name'],
+                "calendar": calendar_data,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Content calendar error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+class GrowthRoadmapRequest(BaseModel):
+    domain: str
+    business_type: str = "general"
+    company_size: Optional[str] = "SMB"
+
+@app.post("/api/growth-roadmap")
+async def growth_roadmap(request: GrowthRoadmapRequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Generate 90-day growth roadmap with OKRs and experiments"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user = db.query(User).filter(User.email == payload.get("sub")).first()
+        
+        if not user:
+            raise HTTPException(401, "User not found")
+        
+        template = BUSINESS_TEMPLATES.get(request.business_type, BUSINESS_TEMPLATES["general"])
+        
+        # Crawl website
+        logger.info(f"Creating growth roadmap for {request.domain}")
+        site_data = crawl_site(request.domain, 10)
+        
+        # Build context
+        context = ""
+        if site_data.get('pages'):
+            for page in site_data['pages'][:5]:
+                if 'analysis' in page:
+                    analysis = page['analysis']
+                    if 'title' in analysis:
+                        context += analysis['title'].get('text', '') + " "
+                    if 'meta' in analysis:
+                        context += analysis['meta'].get('description', '') + " "
+        
+        # Generate roadmap using Gemini
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""You are an elite Growth Marketing Expert and Strategic Planner.
+
+Create a 90-day growth roadmap for {request.domain} ({template['name']} business, {request.company_size} size).
+
+CONTEXT: {context}
+
+CREATE:
+
+1. **North Star Metric**
+   - The ONE metric that matters most for this business
+   - Current estimated value
+   - Target value (90 days)
+   - Why this metric matters
+
+2. **OKRs** (3 objectives, each with 3 key results)
+   - Objective: Ambitious goal
+   - Key Results: Measurable outcomes
+
+3. **10 Growth Experiments** with ICE scoring:
+   - Hypothesis
+   - Test description
+   - Success criteria
+   - Impact (1-10)
+   - Confidence (1-10)
+   - Ease (1-10)
+   - ICE Score = Impact × Confidence × Ease
+   - Timeline (1 week/2 weeks/1 month)
+
+4. **90-Day Roadmap**:
+   - Month 1: Foundation & Quick Wins (5 milestones)
+   - Month 2: Scale & Optimize (5 milestones)
+   - Month 3: Expand & Innovate (5 milestones)
+
+5. **Resource Allocation**:
+   - Budget breakdown by channel
+   - Team requirements
+   - Tools needed
+
+KEY METRICS for {template['name']}: {', '.join(template['metrics'])}
+FOCUS AREAS: {', '.join(template['focus_areas'])}
+
+Return ONLY valid JSON:
+{{
+  "northStarMetric": {{
+    "metric": "string",
+    "currentValue": "string",
+    "targetValue": "string",
+    "reasoning": "string"
+  }},
+  "okrs": [
+    {{
+      "objective": "string",
+      "keyResults": [
+        {{"description": "string", "target": "string", "current": "string"}}
+      ]
+    }}
+  ],
+  "experiments": [
+    {{
+      "hypothesis": "string",
+      "description": "string",
+      "successCriteria": "string",
+      "impact": 8,
+      "confidence": 7,
+      "ease": 9,
+      "iceScore": 504,
+      "timeline": "2 weeks",
+      "category": "Acquisition/Activation/Retention/Revenue"
+    }}
+  ],
+  "roadmap": {{
+    "month1": {{
+      "theme": "Foundation & Quick Wins",
+      "milestones": ["string"]
+    }},
+    "month2": {{
+      "theme": "Scale & Optimize",
+      "milestones": ["string"]
+    }},
+    "month3": {{
+      "theme": "Expand & Innovate",
+      "milestones": ["string"]
+    }}
+  }},
+  "resources": {{
+    "budgetBreakdown": [
+      {{"channel": "string", "amount": "$1000", "percentage": "20%"}}
+    ],
+    "teamNeeds": ["string"],
+    "toolsRequired": ["string"]
+  }}
+}}"""
+
+        response = model.generate_content(prompt)
+        result_text = response.text
+        
+        # Parse JSON
+        import json
+        import re
+        
+        json_match = re.search(r'```json\s*(.*?)\s*```', result_text, re.DOTALL)
+        if json_match:
+            result_text = json_match.group(1)
+        else:
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if json_match:
+                result_text = json_match.group(0)
+        
+        roadmap_data = json.loads(result_text)
+        
+        # Log activity
+        if user:
+            log_activity(db, user.id, user.email, "Growth Roadmap", f"Generated 90-day plan for {request.domain}", get_client_ip(req))
+        
+        return {
+            "success": True,
+            "data": {
+                "success": True,
+                "domain": request.domain,
+                "businessType": template['name'],
+                "roadmap": roadmap_data,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Growth roadmap error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+class BlueOceanRequest(BaseModel):
+    domain: str
+    business_type: str = "general"
+    industry: Optional[str] = None
+
+@app.post("/api/blue-ocean")
+async def blue_ocean_strategy(request: BlueOceanRequest, req: Request = None, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Blue Ocean Strategy analysis - find uncontested market space"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user = db.query(User).filter(User.email == payload.get("sub")).first()
+        
+        if not user:
+            raise HTTPException(401, "User not found")
+        
+        template = BUSINESS_TEMPLATES.get(request.business_type, BUSINESS_TEMPLATES["general"])
+        
+        # Crawl website
+        logger.info(f"Analyzing Blue Ocean Strategy for {request.domain}")
+        site_data = crawl_site(request.domain, 10)
+        
+        # Build context
+        context = ""
+        if site_data.get('pages'):
+            for page in site_data['pages'][:5]:
+                if 'analysis' in page:
+                    analysis = page['analysis']
+                    if 'title' in analysis:
+                        context += analysis['title'].get('text', '') + " "
+                    if 'meta' in analysis:
+                        context += analysis['meta'].get('description', '') + " "
+        
+        # Generate Blue Ocean analysis using Gemini
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        industry_note = f" in the {request.industry} industry" if request.industry else ""
+        
+        prompt = f"""You are an elite Business Strategy Consultant specializing in Blue Ocean Strategy.
+
+Analyze {request.domain} ({template['name']} business{industry_note}) and identify opportunities for creating uncontested market space.
+
+CONTEXT: {context}
+
+BLUE OCEAN STRATEGY FRAMEWORK:
+
+1. **Current Red Ocean** (crowded, competitive space)
+   - Describe the current competitive landscape
+   - Key pain points of competing in this space
+   - Why it's a "red ocean"
+
+2. **Potential Blue Ocean** (uncontested market space)
+   - Describe the untapped opportunity
+   - Why this space is underserved
+   - Potential market size
+
+3. **Four Actions Framework**:
+   
+   **ELIMINATE** (5 factors the industry takes for granted):
+   - What can be eliminated that the industry has long competed on?
+   
+   **REDUCE** (5 factors to reduce well below industry standard):
+   - What factors should be reduced below the industry standard?
+   
+   **RAISE** (5 factors to raise well above industry standard):
+   - What factors should be raised above the industry standard?
+   
+   **CREATE** (5 factors the industry has never offered):
+   - What factors should be created that the industry never offered?
+
+4. **Strategic Move**:
+   - Concrete action plan to execute this Blue Ocean strategy
+   - Timeline and milestones
+   - Expected outcomes
+
+5. **Competitive Positioning**:
+   - Current position in red ocean
+   - Target position in blue ocean
+   - Key differentiators
+   - Positioning statement
+
+6. **Market Gaps** (5 opportunities):
+   - Description of gap
+   - Opportunity level (High/Medium/Low)
+   - How to exploit it
+   - Estimated impact
+
+Return ONLY valid JSON:
+{{
+  "currentRedOcean": {{
+    "description": "string",
+    "painPoints": ["string"],
+    "competitiveIntensity": "High/Medium/Low"
+  }},
+  "potentialBlueOcean": {{
+    "description": "string",
+    "whyUnderserved": "string",
+    "marketSize": "string"
+  }},
+  "fourActions": {{
+    "eliminate": ["string"],
+    "reduce": ["string"],
+    "raise": ["string"],
+    "create": ["string"]
+  }},
+  "strategicMove": {{
+    "actionPlan": "string",
+    "timeline": "string",
+    "milestones": ["string"],
+    "expectedOutcomes": ["string"]
+  }},
+  "positioning": {{
+    "currentPosition": "string",
+    "targetPosition": "string",
+    "differentiators": ["string"],
+    "positioningStatement": "string"
+  }},
+  "marketGaps": [
+    {{
+      "description": "string",
+      "opportunityLevel": "High",
+      "howToExploit": "string",
+      "estimatedImpact": "string"
+    }}
+  ]
+}}"""
+
+        response = model.generate_content(prompt)
+        result_text = response.text
+        
+        # Parse JSON
+        import json
+        import re
+        
+        json_match = re.search(r'```json\s*(.*?)\s*```', result_text, re.DOTALL)
+        if json_match:
+            result_text = json_match.group(1)
+        else:
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if json_match:
+                result_text = json_match.group(0)
+        
+        blue_ocean_data = json.loads(result_text)
+        
+        # Log activity
+        if user:
+            log_activity(db, user.id, user.email, "Blue Ocean Strategy", f"Analyzed {request.domain}", get_client_ip(req))
+        
+        return {
+            "success": True,
+            "data": {
+                "success": True,
+                "domain": request.domain,
+                "businessType": template['name'],
+                "blueOcean": blue_ocean_data,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Blue Ocean Strategy error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
