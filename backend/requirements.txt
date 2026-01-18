@@ -20,7 +20,7 @@ lxml==5.3.0
 # Local AI & NLP (FREE - No Google Cloud needed!)
 textblob==0.18.0
 pysentimiento==0.7.3
-Pillow==11.0.0
+Pillow==10.4.0
 
 # Advanced Web Crawling (Optional - for async crawling)
 crawl4ai==0.4.247
