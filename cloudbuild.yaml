@@ -5,7 +5,9 @@ steps:
       'build',
       '-t', 'gcr.io/$PROJECT_ID/ai-dashboard:$SHORT_SHA',
       '-t', 'gcr.io/$PROJECT_ID/ai-dashboard:latest',
-      '.'
+      '-f', 'frontend/Dockerfile',
+      '--build-arg', 'NEXT_PUBLIC_API_URL=https://ai-marketing-backend-527790332290.europe-west1.run.app',
+      './frontend'
     ]
   
   # Push frontend
