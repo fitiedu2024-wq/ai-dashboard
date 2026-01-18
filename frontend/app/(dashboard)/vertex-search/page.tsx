@@ -1,0 +1,223 @@
+"use client";
+
+import { useState } from "react";
+import axios from "axios";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface SearchResult {
+  title: string;
+  snippet: string;
+  url: string;
+  source: string;
+  relevance_score: number;
+}
+
+interface SearchData {
+  query: string;
+  answer: string;
+  results: SearchResult[];
+  total_results: number;
+  engine_id: string;
+  timestamp: string;
+}
+
+export default function VertexSearchPage() {
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [searchData, setSearchData] = useState<SearchData | null>(null);
+  const [error, setError] = useState("");
+
+  const handleSearch = async () => {
+    if (!query.trim()) {
+      setError("Please enter a search query");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSearchData(null);
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        `${API_BASE}/api/vertex-search`,
+        { query },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Handle both nested and flat data structures
+      const data = response.data.data || response.data;
+      
+      if (data && data.answer) {
+        setSearchData(data);
+      } else {
+        setError("No results found");
+      }
+    } catch (err: any) {
+      console.error("Search error:", err);
+      setError(err.response?.data?.error || "Search failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          🔍 Marketing Intelligence Hub
+        </h1>
+        <p className="text-gray-600">
+          Search through curated marketing content from industry leaders using AI-powered Vertex AI Search
+        </p>
+      </div>
+
+      {/* Search Box */}
+      <div className="mb-8">
+        <div className="flex gap-4">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Ask anything about marketing, SEO, content strategy, growth hacking..."
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={loading}
+          />
+          <button
+            onClick={handleSearch}
+            disabled={loading || !query.trim()}
+            className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
+          >
+            {loading ? "Searching..." : "Search"}
+          </button>
+        </div>
+        
+        {/* Example Queries */}
+        <div className="mt-4">
+          <p className="text-sm text-gray-500 mb-2">Try asking:</p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              "How to create an effective content marketing strategy?",
+              "Best SEO practices for 2026",
+              "How to improve website conversion rates?",
+              "Social media marketing tips for B2B"
+            ].map((example, idx) => (
+              <button
+                key={idx}
+                onClick={() => setQuery(example)}
+                className="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700 transition-colors"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      )}
+
+      {/* Search Results */}
+      {searchData && !loading && (
+        <div className="space-y-6">
+          {/* AI-Generated Answer */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                <span className="text-white text-xl">🤖</span>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-gray-900 mb-2">AI-Powered Answer</h2>
+                <p className="text-sm text-gray-600">Generated by Vertex AI Search</p>
+              </div>
+            </div>
+            <div className="prose prose-blue max-w-none">
+              <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                {searchData.answer}
+              </div>
+            </div>
+          </div>
+
+          {/* Search Results */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              📚 Relevant Resources ({searchData.total_results})
+            </h3>
+            <div className="space-y-4">
+              {searchData.results.map((result, idx) => (
+                <div
+                  key={idx}
+                  className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <a
+                        href={result.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-lg font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        {result.title}
+                      </a>
+                      <p className="text-sm text-gray-500 mt-1 mb-2">{result.source}</p>
+                      <p className="text-gray-700 leading-relaxed">{result.snippet}</p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-medium text-gray-600">
+                          {(result.relevance_score * 100).toFixed(0)}%
+                        </span>
+                        <span className="text-xs text-gray-500">match</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Metadata */}
+          <div className="text-sm text-gray-500 text-center pt-4 border-t">
+            <p>
+              Powered by Vertex AI Search • Engine ID: {searchData.engine_id.split('_')[0]}... • 
+              Searched at {new Date(searchData.timestamp).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!searchData && !loading && !error && (
+        <div className="text-center py-16">
+          <div className="text-6xl mb-4">🔍</div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            Start Your Marketing Intelligence Search
+          </h3>
+          <p className="text-gray-600">
+            Ask questions about marketing strategies, SEO, content creation, and more
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

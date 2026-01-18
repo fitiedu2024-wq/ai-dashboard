@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import {
   Home, Search, Smartphone, BarChart3, Key, Settings, Users, Activity,
   LogOut, Zap, Eye, MessageSquare, TrendingUp, Sparkles, Menu, X, Moon, Sun,
-  Building2, Target, Calendar, Rocket, Waves
+  Building2, Target, Calendar, Rocket, Waves, SearchCheck
 } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 import { useToast } from '../lib/toast';
@@ -48,6 +48,7 @@ export default function Sidebar() {
   ];
 
   const advancedLinks = [
+    { href: '/vertex-search', label: 'Marketing Hub', icon: SearchCheck },
     { href: '/business-intel', label: 'Business Intel', icon: Building2 },
     { href: '/keyword-intent', label: 'Keyword Intent', icon: Target },
     { href: '/content-calendar', label: 'Content Calendar', icon: Calendar },
