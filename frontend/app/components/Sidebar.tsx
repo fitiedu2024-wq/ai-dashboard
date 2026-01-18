@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import {
   Home, Search, Smartphone, BarChart3, Key, Settings, Users, Activity,
-  LogOut, Zap, Eye, MessageSquare, TrendingUp, Sparkles, Menu, X, Moon, Sun
+  LogOut, Zap, Eye, MessageSquare, TrendingUp, Sparkles, Menu, X, Moon, Sun,
+  Building2, Target, Calendar, Rocket, Waves
 } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 import { useToast } from '../lib/toast';
@@ -44,6 +45,14 @@ export default function Sidebar() {
     { href: '/analytics', label: 'Analytics', icon: TrendingUp },
     { href: '/vision-ai', label: 'Vision AI', icon: Eye },
     { href: '/sentiment', label: 'Sentiment', icon: MessageSquare },
+  ];
+
+  const advancedLinks = [
+    { href: '/business-intel', label: 'Business Intel', icon: Building2 },
+    { href: '/keyword-intent', label: 'Keyword Intent', icon: Target },
+    { href: '/content-calendar', label: 'Content Calendar', icon: Calendar },
+    { href: '/growth-roadmap', label: 'Growth Roadmap', icon: Rocket },
+    { href: '/blue-ocean', label: 'Blue Ocean', icon: Waves },
   ];
 
   const adminLinks = [
@@ -110,6 +119,16 @@ export default function Sidebar() {
           <Zap className="w-3 h-3" />AI Tools
         </div>
         {aiLinks.map((link) => <NavLink key={link.href} {...link} />)}
+      </div>
+
+      <div className="border-t border-white/10 my-6"></div>
+
+      {/* Advanced Marketing */}
+      <div className="space-y-1 mb-6">
+        <div className="text-xs text-gray-500 uppercase tracking-wider mb-3 px-4 flex items-center gap-2">
+          <Sparkles className="w-3 h-3" />Advanced
+        </div>
+        {advancedLinks.map((link) => <NavLink key={link.href} {...link} />)}
       </div>
 
       {/* Admin Section */}
