@@ -8,7 +8,7 @@ import secrets
 
 # Load admin credentials from environment variables
 DEFAULT_ADMIN = {
-    "email": os.getenv("ADMIN_EMAIL", "3ayoty@gmail.com"),
+    "email": os.getenv("ADMIN_EMAIL", "3ayoty@grinners.ai"),
     "password": os.getenv("ADMIN_PASSWORD", "AliTia20")
 }
 
