@@ -33,7 +33,7 @@ export default function KeywordAnalysis() {
     } else if (data) {
       setResults(data);
       // Fix: Access nested data structure correctly
-      const analysisData = data.data || data;
+      const analysisData = data;
       success('Analysis Complete', `Found ${analysisData?.keywords?.length || 0} keywords`);
     }
 
