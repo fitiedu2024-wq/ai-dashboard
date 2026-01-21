@@ -19,8 +19,7 @@ export default function Analytics() {
       const response = await analyticsAPI.getDashboard();
       if (response.data) {
         // Handle double-nested structure from API wrapper
-        const analyticsData = response.data.data || response.data;
-        setData(analyticsData);
+    const analyticsData = response.data;        setData(analyticsData);
       }
     } catch (error) {
       console.error('Error:', error);
