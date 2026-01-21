@@ -19,7 +19,7 @@ export default function AIRecommendations() {
       // Get user info
       const userResponse = await authAPI.getMe();
       if (userResponse.data) {
-        const userData = userResponse.data.data || userResponse.data;
+const userData = userResponse.data;
         setUser(userData);
       }
       
