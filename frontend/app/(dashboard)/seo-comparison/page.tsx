@@ -12,7 +12,7 @@ export default function SEOComparison() {
   const { success, error: showError, info } = useToast();
   const [yourDomain, setYourDomain] = useState('');
   const [competitors, setCompetitors] = useState('');
-  const [results, setResults] = useState<SEOComparisonResult | null>(null);
+  const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [validationError, setValidationError] = useState('');
 
@@ -49,20 +49,18 @@ export default function SEOComparison() {
       showError('Analysis Failed', error);
       setResults(null);
     } else if (data) {
-      setResults(data);
-      // Fix: Access nested data structure correctly
-      const analysisData = data.data || data;
-      success('Analysis Complete', `Analyzed ${analysisData?.your_site?.total_pages || 0} pages`);
+      // Extract the actual data from nested structure
+      const actualData = (data as any).data?.data || (data as any).data || data;
+      setResults(actualData);
+      success('Analysis Complete', `Analyzed ${actualData?.your_site?.total_pages || 0} pages`);
     }
 
     setLoading(false);
   };
 
-  // Helper to get the actual data (handles both nested and flat structures)
+  // Helper to get the actual data
   const getAnalysisData = () => {
-    if (!results) return null;
-    // Handle double-nested structure from API wrapper
-    return results.data?.data || results.data || results;
+    return results;
   };
 
   const analysisData = getAnalysisData();
