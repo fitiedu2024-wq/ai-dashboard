@@ -12,7 +12,7 @@ export default function KeywordAnalysis() {
   const { success, error: showError, info } = useToast();
   const [domain, setDomain] = useState('');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<KeywordAnalysisResult | null>(null);
+  const [results, setResults] = useState<any>(null);
   const [filter, setFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -31,20 +31,19 @@ export default function KeywordAnalysis() {
       showError('Analysis Failed', error);
       setResults(null);
     } else if (data) {
-      setResults(data);
-      // Fix: Access nested data structure correctly
-      const keywordCount = data.data?.keywords?.length || 0;
+      // Extract the actual data from nested structure
+      const actualData = (data as any).data?.data || (data as any).data || data;
+      setResults(actualData);
+      const keywordCount = actualData.keywords?.length || 0;
       success('Analysis Complete', `Found ${keywordCount} keywords`);
     }
 
     setLoading(false);
   };
 
-  // Helper to get the actual data (handles both nested and flat structures)
+  // Helper to get the actual data
   const getAnalysisData = () => {
-    if (!results) return null;
-    // Handle double-nested structure from API wrapper
-    return results.data?.data || results.data || results;
+    return results;
   };
 
   const analysisData = getAnalysisData();
